@@ -1,0 +1,362 @@
+@model BireyselHesaplar.Models.BlogPost
+@using BireyselHesaplar.Models
+
+@{
+    ViewData["Title"] = "Blog Güncelle";
+    var rawCategories = ViewBag.Categories as List<Category> ?? new List<Category>();
+    if (!rawCategories.Any())
+    {
+        rawCategories = new List<Category>
+        {
+            new Category { Name = "Teknoloji", Slug = "teknoloji" },
+            new Category { Name = "Yazilim", Slug = "yazilim" },
+            new Category { Name = "Tasarim", Slug = "tasarim" },
+            new Category { Name = "Yasam", Slug = "yasam" },
+            new Category { Name = "Kariyer/Is", Slug = "is" }
+        };
+    }
+
+    var categoryNameById = rawCategories.ToDictionary(x => x.Id, x => x.Name ?? string.Empty);
+    var categoryItems = rawCategories
+        .Where(x => !string.IsNullOrWhiteSpace(x.Slug) && !string.IsNullOrWhiteSpace(x.Name))
+        .OrderBy(x => x.ParentCategoryId.HasValue ? 1 : 0)
+        .ThenBy(x => x.ParentCategoryId.HasValue && categoryNameById.TryGetValue(x.ParentCategoryId.Value, out var parentName) ? parentName : x.Name)
+        .ThenBy(x => x.Name)
+        .Select(x =>
+        {
+            var label = x.Name ?? string.Empty;
+            if (x.ParentCategoryId.HasValue
+                && categoryNameById.TryGetValue(x.ParentCategoryId.Value, out var resolvedParent)
+                && !string.IsNullOrWhiteSpace(resolvedParent))
+            {
+                label = $"{resolvedParent} / {label}";
+            }
+
+            return (Value: x.Slug ?? string.Empty, Label: label);
+        })
+        .GroupBy(x => x.Value, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.First())
+        .ToList();
+
+    if (!categoryItems.Any(x => string.Equals(x.Value, Model.CategorySlug, StringComparison.OrdinalIgnoreCase)))
+    {
+        var fallbackCategory = string.IsNullOrWhiteSpace(Model.CategorySlug) ? "yasam" : Model.CategorySlug;
+        categoryItems.Insert(0, (Value: fallbackCategory, Label: fallbackCategory));
+    }
+}
+
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-body">
+            <h2 class="mb-4">Blog Güncelle</h2>
+
+            <form asp-action="Edit" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="UserId" />
+                <input type="hidden" asp-for="CreatedAt" />
+                <input type="hidden" asp-for="ImageUrl" />
+                <input type="hidden" asp-for="ImagePlacement" />
+                <input type="hidden" asp-for="ImageWidthPercent" />
+
+                <div class="mb-3">
+                    <label asp-for="Title" class="form-label">Başlık</label>
+                    <div class="d-flex flex-wrap gap-2 mb-2 editor-toolbar">
+                        <button type="button" class="btn btn-sm editor-btn" data-format="bold" data-scope="title">Kalın</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="italic" data-scope="title">İtalik</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="underline" data-scope="title">Altı Çizili</button>
+                    </div>
+                    <input type="hidden" asp-for="Title" id="titleInput" />
+                    <div id="titleEditor"
+                         class="rich-editor title-editor"
+                         contenteditable="true"
+                         aria-label="Başlık"
+                         data-placeholder="Kısa ve net bir başlık yazın">
+                        @Html.Raw(Model.Title)
+                    </div>
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+
+                <style>
+                    .rich-editor {
+                        min-height: 180px;
+                        border: 1px solid #dee2e6;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        background: #fff;
+                        font-size: 1rem;
+                        line-height: 1.6;
+                        outline: none;
+                    }
+
+                    .rich-editor:focus {
+                        border-color: #4f46e5;
+                        box-shadow: 0 0 0 0.2rem rgba(79, 70, 229, 0.15);
+                    }
+
+                    .editor-toolbar .editor-btn {
+                        border: 1px solid #cfd8eb;
+                        background: #fff;
+                        color: #1f2a44;
+                        border-radius: 999px;
+                        min-height: 36px;
+                        padding: 0 14px;
+                        font-weight: 700;
+                        transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+                    }
+
+                    .editor-toolbar .editor-btn:hover {
+                        border-color: #111827;
+                    }
+
+                    .editor-toolbar .editor-btn.active,
+                    .editor-toolbar .editor-btn[aria-pressed="true"],
+                    .editor-toolbar .editor-btn:active,
+                    .editor-toolbar .editor-btn:focus-visible {
+                        background: #111827;
+                        color: #fff;
+                        border-color: #111827;
+                        box-shadow: none;
+                    }
+
+                    .rich-editor[contenteditable="true"][data-placeholder]:empty:before {
+                        content: attr(data-placeholder);
+                        color: #9ca3af;
+                    }
+
+                    .title-editor {
+                        min-height: 64px;
+                        font-weight: 700;
+                        font-size: 1.1rem;
+                    }
+
+                    .rich-editor em,
+                    .rich-editor i {
+                        font-style: italic;
+                    }
+
+                    .rich-editor strong,
+                    .rich-editor b {
+                        font-weight: 700;
+                    }
+
+                    .rich-editor u {
+                        text-decoration: underline;
+                    }
+
+                    .category-select {
+                        min-height: 48px;
+                        border-radius: 12px;
+                        border-color: #cfd8eb;
+                        color: #1f2a44;
+                        font-weight: 600;
+                    }
+                </style>
+
+                <div class="mb-3">
+                    <label asp-for="Content" class="form-label">İçerik</label>
+                    <div class="d-flex flex-wrap gap-2 mb-2 editor-toolbar">
+                        <button type="button" class="btn btn-sm editor-btn" data-format="bold">Kalın</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="italic">İtalik</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="underline">Altı Çizili</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="ul">Liste</button>
+                        <button type="button" class="btn btn-sm editor-btn" data-format="ol">Numaralı</button>
+                    </div>
+                    <input type="hidden" asp-for="Content" id="contentInput" />
+                    <div id="contentEditor" class="rich-editor" contenteditable="true" aria-label="İçerik">
+                        @Html.Raw(Model.Content)
+                    </div>
+                    <span asp-validation-for="Content" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label for="imageFile" class="form-label">Yeni Görsel Seç (opsiyonel)</label>
+                    <input id="imageFile" name="imageFile" class="form-control" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" />
+                    <div class="form-text">Boş bırakırsan mevcut görsel korunur. Maksimum 20 MB.</div>
+                    <span asp-validation-for="ImageUrl" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="CategorySlug" class="form-label">Katalog Guncelle</label>
+                    <select asp-for="CategorySlug" class="form-select category-select">
+                        @foreach (var categoryItem in categoryItems)
+                        {
+                            <option value="@categoryItem.Value">@categoryItem.Label</option>
+                        }
+                    </select>
+                    <div class="form-text">Tum kataloglari buradan gorebilir ve sectiginde kategori hemen degisir.</div>
+                    <span asp-validation-for="CategorySlug" class="text-danger"></span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.ImageUrl))
+                {
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-2">Mevcut Görsel</small>
+                        <img src="@Model.ImageUrl" class="img-fluid rounded" style="max-width: 320px;" alt="Mevcut görsel" />
+                    </div>
+                }
+
+                <div class="row g-3 mb-3 d-none">
+                    <div class="col-md-6">
+                        <label asp-for="ImagePlacement" class="form-label">Görsel Konumu</label>
+                        <select asp-for="ImagePlacement" class="form-select">
+                            <option value="Top">Üstte</option>
+                            <option value="Left">Solda</option>
+                            <option value="Right">Sağda</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ImageWidthPercent" class="form-label">Görsel Boyutu (%)</label>
+                        <input asp-for="ImageWidthPercent" class="form-control" min="25" max="100" />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-warning">Güncelle</button>
+                <a asp-action="Index" class="btn btn-secondary">İptal</a>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const contentInput = document.getElementById("contentInput");
+            const contentEditor = document.getElementById("contentEditor");
+            const titleInput = document.getElementById("titleInput");
+            const titleEditor = document.getElementById("titleEditor");
+            const toolbarButtons = document.querySelectorAll(".editor-toolbar [data-format]");
+            const selectionRanges = { title: null, content: null };
+
+            function getEditorByScope(scope) {
+                return scope === "title" ? titleEditor : contentEditor;
+            }
+
+            function saveSelection(scope) {
+                const editor = getEditorByScope(scope);
+                const selection = window.getSelection();
+                if (!editor || !selection || selection.rangeCount === 0) return;
+
+                const range = selection.getRangeAt(0);
+                if (!editor.contains(range.commonAncestorContainer)) return;
+                selectionRanges[scope] = range.cloneRange();
+            }
+
+            function restoreSelection(scope) {
+                const range = selectionRanges[scope];
+                const selection = window.getSelection();
+                if (!range || !selection) return;
+
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+
+            function applyFormat(type, scope) {
+                const normalizedScope = scope === "title" ? "title" : "content";
+                const editor = getEditorByScope(normalizedScope);
+                editor.focus();
+                restoreSelection(normalizedScope);
+                if (type === "bold") {
+                    document.execCommand("bold", false, null);
+                }
+                if (type === "italic") {
+                    document.execCommand("italic", false, null);
+                }
+                if (type === "underline") {
+                    document.execCommand("underline", false, null);
+                }
+                if (type === "ul") {
+                    document.execCommand("insertUnorderedList", false, null);
+                }
+                if (type === "ol") {
+                    document.execCommand("insertOrderedList", false, null);
+                }
+
+                if (normalizedScope === "title") {
+                    syncTitleInput();
+                } else {
+                    syncContentInput();
+                }
+
+                saveSelection(normalizedScope);
+                updateActiveButtons(normalizedScope);
+            }
+
+            function sanitizeHtml(value) {
+                return value
+                    .replace(/<\/?b>/gi, (match) => match.startsWith("</") ? "</strong>" : "<strong>")
+                    .replace(/<\/?i>/gi, (match) => match.startsWith("</") ? "</em>" : "<em>")
+                    .replace(/<(?!\/?(strong|em|u|br|ul|ol|li)\b)[^>]*>/gi, "");
+            }
+
+            function sanitizeTitleHtml(value) {
+                const html = sanitizeHtml(value || "");
+                return html.replace(/<br\s*\/?>/gi, "").trim();
+            }
+
+            function syncTitleInput() {
+                const html = sanitizeTitleHtml(titleEditor.innerHTML || "");
+                titleInput.value = html;
+            }
+
+            function syncContentInput() {
+                const html = sanitizeHtml(contentEditor.innerHTML || "");
+                contentInput.value = html;
+            }
+
+            function updateActiveButtons(scope) {
+                toolbarButtons.forEach(button => {
+                    const buttonScope = button.dataset.scope || "content";
+                    if (buttonScope !== scope) {
+                        return;
+                    }
+
+                    const format = button.dataset.format;
+                    let isActive = false;
+
+                    if (format === "bold") isActive = document.queryCommandState("bold");
+                    if (format === "italic") isActive = document.queryCommandState("italic");
+                    if (format === "underline") isActive = document.queryCommandState("underline");
+                    if (format === "ul") isActive = document.queryCommandState("insertUnorderedList");
+                    if (format === "ol") isActive = document.queryCommandState("insertOrderedList");
+
+                    button.classList.toggle("active", !!isActive);
+                    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+                });
+            }
+
+            toolbarButtons.forEach(button => {
+                button.addEventListener("mousedown", (event) => {
+                    event.preventDefault();
+                    saveSelection(button.dataset.scope || "content");
+                });
+                button.addEventListener("click", () => applyFormat(button.dataset.format, button.dataset.scope || "content"));
+            });
+
+            contentEditor.addEventListener("input", () => {
+                syncContentInput();
+                saveSelection("content");
+                updateActiveButtons("content");
+            });
+            titleEditor.addEventListener("input", () => {
+                syncTitleInput();
+                saveSelection("title");
+                updateActiveButtons("title");
+            });
+
+            syncTitleInput();
+            syncContentInput();
+            updateActiveButtons("title");
+            updateActiveButtons("content");
+
+            contentEditor.addEventListener("keyup", () => { saveSelection("content"); updateActiveButtons("content"); });
+            contentEditor.addEventListener("mouseup", () => { saveSelection("content"); updateActiveButtons("content"); });
+            contentEditor.addEventListener("focus", () => { saveSelection("content"); updateActiveButtons("content"); });
+            titleEditor.addEventListener("keyup", () => { saveSelection("title"); updateActiveButtons("title"); });
+            titleEditor.addEventListener("mouseup", () => { saveSelection("title"); updateActiveButtons("title"); });
+            titleEditor.addEventListener("focus", () => { saveSelection("title"); updateActiveButtons("title"); });
+        })();
+    </script>
+}

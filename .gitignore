@@ -1,0 +1,48 @@
+# Build results
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet
+packages/
+*.nupkg
+
+# Publish
+publish/
+wwwroot/dist/
+
+# Environment files
+.env
+appsettings.Development.json
+
+# Node (frontend varsa)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Test results
+TestResults/
+
+# Coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp

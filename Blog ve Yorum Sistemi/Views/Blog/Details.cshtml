@@ -1,0 +1,701 @@
+@model BireyselHesaplar.Models.BlogPost
+@using BireyselHesaplar.Utilities
+
+@{
+    ViewData["Title"] = "Blog Detay";
+    var isAdmin = ViewBag.IsAdmin != null && (bool)ViewBag.IsAdmin;
+    var likeCount = Model.Likes?.Count ?? 0;
+    var likedCommentIds = ViewBag.LikedCommentIds as System.Collections.Generic.HashSet<int>
+        ?? new System.Collections.Generic.HashSet<int>();
+    var canModerateComments = ViewBag.CanModerateComments != null && (bool)ViewBag.CanModerateComments;
+    var currentUserId = ViewBag.CurrentUserId != null ? (int)ViewBag.CurrentUserId : 0;
+    var activeBan = ViewBag.ActiveBan as BireyselHesaplar.Models.UserBan;
+    var isBanned = activeBan != null;
+    var allComments = (Model.Comments ?? new List<BireyselHesaplar.Models.Comment>())
+        .ToList();
+    const int MaxReplyDepth = 3;
+    const int MaxVisualDepth = 3;
+    var commentCount = allComments.Count;
+    var commentSort = ViewBag.CommentSort as string ?? "new";
+    var canManagePost = ViewBag.UserId != null && (Model.UserId == (int)ViewBag.UserId || isAdmin);
+    var returnUrl = ViewBag.ReturnUrl as string ?? Url.Action("Index", "Blog") ?? "/Blog";
+    var detailsPageUrl = Url.Action("Details", "Blog", new { id = Model.Id, sort = commentSort, returnUrl = returnUrl }) ?? $"/Blog/Details/{Model.Id}";
+    var commentsReturnUrl = $"{detailsPageUrl}#commentsSection";
+
+    var commentById = allComments.ToDictionary(x => x.Id, x => x);
+    var childrenByParent = allComments.ToLookup(x => x.ParentCommentId);
+
+    bool IsImagePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return value.Contains(".jpg", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".png", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".webp", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".gif", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    var hasImage = IsImagePath(Model.ImageUrl);
+
+    int GetDepth(BireyselHesaplar.Models.Comment comment)
+    {
+        var depth = 0;
+        var parentId = comment.ParentCommentId;
+        while (parentId.HasValue && commentById.TryGetValue(parentId.Value, out var parent))
+        {
+            depth++;
+            parentId = parent.ParentCommentId;
+        }
+        return depth;
+    }
+
+    IEnumerable<BireyselHesaplar.Models.Comment> SortComments(IEnumerable<BireyselHesaplar.Models.Comment> comments)
+    {
+        if (commentSort == "old")
+            return comments.OrderBy(x => x.CreatedAt);
+
+        if (commentSort == "top")
+            return comments.OrderByDescending(x => x.Likes?.Count ?? 0).ThenByDescending(x => x.CreatedAt);
+
+        return comments.OrderByDescending(x => x.CreatedAt);
+    }
+
+    var orderedComments = new List<BireyselHesaplar.Models.Comment>();
+    void AddBranch(int? parentId)
+    {
+        var children = childrenByParent[parentId];
+        if (children == null || !children.Any())
+            return;
+
+        foreach (var child in SortComments(children))
+        {
+            orderedComments.Add(child);
+            AddBranch(child.Id);
+        }
+    }
+    AddBranch(null);
+}
+
+<style>
+    .detail-back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--app-ink);
+        text-decoration: none;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+
+    .detail-back-link:hover {
+        color: var(--app-dark);
+    }
+
+    .detail-card {
+        border-radius: 20px;
+        border: 1px solid var(--app-border);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .detail-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
+    }
+
+    .detail-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .detail-title {
+        font-family: "Lora", "Georgia", serif;
+        font-size: clamp(2rem, 4vw, 2.75rem);
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1.15;
+        color: var(--app-dark);
+        margin: 0 0 0.65rem;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        color: #64748b;
+        font-size: 0.92rem;
+        align-items: center;
+    }
+
+    .detail-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .detail-menu-btn {
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        background: #fff;
+        color: var(--app-ink);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+    }
+
+    .detail-menu-btn:hover,
+    .detail-menu-btn:focus-visible {
+        background: var(--app-dark);
+        color: #fff;
+        border-color: var(--app-dark);
+    }
+
+    .detail-body {
+        display: grid;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .detail-body.with-image {
+        grid-template-columns: minmax(230px, 360px) minmax(0, 1fr);
+    }
+
+    .detail-image {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+        background: transparent;
+        margin: 0;
+    }
+
+    .detail-image-trigger {
+        border: none;
+        background: transparent;
+        padding: 0;
+        width: 100%;
+        display: block;
+        cursor: zoom-in;
+    }
+
+    .detail-image img {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        max-height: 420px;
+        display: block;
+        object-fit: cover;
+    }
+
+    .detail-content {
+        font-size: 1rem;
+        line-height: 1.7;
+        color: var(--app-ink);
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .detail-content ul,
+    .detail-content ol {
+        margin: 0;
+        padding-left: 1.2rem;
+    }
+
+    .detail-content li + li {
+        margin-top: 4px;
+    }
+
+    .detail-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 1400;
+        background: rgba(15, 23, 42, .84);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 22px;
+    }
+
+    .detail-lightbox.is-open {
+        display: flex;
+    }
+
+    .detail-lightbox img {
+        max-width: 94vw;
+        max-height: 90vh;
+        width: auto;
+        height: auto;
+        border-radius: 12px;
+        box-shadow: 0 20px 42px rgba(0, 0, 0, .38);
+    }
+
+    .detail-lightbox-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 42px;
+        height: 42px;
+        border: 1px solid rgba(255, 255, 255, .28);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, .55);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .comment-card {
+        border-radius: 18px;
+        border: 1px solid var(--app-border);
+        background: #f9fbff;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+    }
+
+    .comment-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .comment-count {
+        font-size: 0.9rem;
+        color: #6b7280;
+    }
+
+    .comment-item {
+        border-radius: 14px;
+        border: 1px solid #dce3f1;
+        background: rgba(255, 255, 255, 0.92);
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+
+    .comment-item.nested {
+        border-left: 3px solid rgba(99, 102, 241, 0.5);
+    }
+
+    .comment-body {
+        color: #1f2937;
+        line-height: 1.6;
+        margin-bottom: 12px;
+    }
+
+    .comment-input {
+        border-radius: 12px;
+        border: 1px solid var(--app-border);
+        background: #fffefc;
+        min-height: 120px;
+        padding: 12px 14px;
+    }
+
+    .comment-input:focus {
+        border-color: var(--app-purple);
+        box-shadow: 0 0 0 0.18rem rgba(99, 102, 241, .18);
+    }
+
+    .comment-submit-btn {
+        min-height: 42px;
+        border-radius: 12px;
+        border: 1px solid var(--app-dark);
+        background: var(--app-dark);
+        color: #fff;
+        font-weight: 700;
+        padding: 0 16px;
+    }
+
+    .comment-submit-btn:hover {
+        background: #111827;
+        border-color: #111827;
+        color: #fff;
+    }
+
+    .comment-card .btn.btn-primary {
+        min-height: 42px;
+        border-radius: 12px;
+        border: 1px solid var(--app-dark);
+        background: var(--app-dark);
+        color: #fff;
+        font-weight: 700;
+        padding: 0 16px;
+    }
+
+    .comment-card .btn.btn-primary:hover {
+        background: #111827;
+        border-color: #111827;
+        color: #fff;
+    }
+
+    .detail-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        border: 1px solid #d7dff0;
+        background: #f7f9ff;
+        color: #4b5a7b;
+        padding: 5px 10px;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+
+    @@media (max-width: 992px) {
+        .detail-body.with-image {
+            grid-template-columns: 1fr;
+        }
+
+        .detail-image img {
+            max-height: 58vh;
+            object-fit: contain;
+        }
+    }
+</style>
+
+<div class="container">
+    @if (isBanned)
+    {
+        <div class="alert alert-danger">
+            Bu hesap banlı olduğu için yorum ve beğeni işlemleri kapalı. Bitiş: @activeBan!.ExpiresAt.ToString("dd.MM.yyyy HH:mm")
+        </div>
+    }
+
+    <a href="@returnUrl" class="detail-back-link">
+        <i class="bi bi-arrow-left"></i> Tum Gonderiler
+    </a>
+
+    <div class="card border-0 detail-card mb-4">
+        <div class="card-body p-4 p-md-5">
+            <div class="detail-head">
+                <div class="flex-grow-1">
+                    <h1 class="detail-title">@Html.Raw(TextFormat.SanitizeHtml(Model.Title))</h1>
+
+                    <div class="detail-meta mb-3">
+                <partial name="_UserProfileChip" view-data='new ViewDataDictionary(ViewData) {
+                    ["Username"] = Model.User?.UserName,
+                    ["ProfileImageUrl"] = Model.User?.ProfileImageUrl
+                }' />
+                <span class="detail-meta-item"><i class="bi bi-calendar3"></i>@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</span>
+                <span class="detail-chip">@likeCount beğeni</span>
+                <span class="detail-chip">@commentCount yorum</span>
+                @if (Model.UpdatedAt != null)
+                {
+                    <span class="detail-chip">Güncellendi: @Model.UpdatedAt?.ToString("dd.MM.yyyy HH:mm")</span>
+                }
+            </div>
+
+                </div>
+
+                @if (canManagePost)
+                {
+                    <div class="dropdown">
+                        <button type="button" class="detail-menu-btn" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Yonetim islemleri">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <li>
+                                <a asp-action="Edit" asp-route-id="@Model.Id" class="dropdown-item">Guncelle</a>
+                            </li>
+                            <li>
+                                <form asp-action="Delete" method="post" class="m-0" data-confirm="Silmek istediginize emin misiniz?">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@Model.Id" />
+                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                    <button type="submit" class="dropdown-item text-danger">Sil</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                }
+            </div>
+
+            <div class="detail-body @(hasImage ? "with-image" : "")">
+                @if (hasImage)
+                {
+                    <figure class="detail-image">
+                        <button type="button" class="detail-image-trigger" id="detailImageTrigger" aria-label="Gorseli buyut">
+                            <img src="@Model.ImageUrl" alt="Gonderi gorseli" loading="lazy" />
+                        </button>
+                    </figure>
+                }
+
+                <div class="detail-content">@Html.Raw(TextFormat.SanitizeHtml(Model.Content))</div>
+            </div>
+
+            @* Detay sayfasinda alt begeni kutusu kaldirildi.
+            <div class="detail-like-row">
+                <a asp-action="Index" class="btn btn-outline-secondary">Listeye Dön</a>
+                <form asp-action="ToggleLike" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="blogPostId" value="@Model.Id" />
+                    <input type="hidden" name="returnAction" value="Details" />
+                    <button type="submit" class="detail-like-btn @(hasLiked ? "active" : "")" data-likecount="@likeCount" @(isBanned ? "disabled" : "")>
+                        @(hasLiked ? "Beğendin" : "Beğen")
+                    </button>
+                </form>
+
+                @if (ViewBag.UserId != null && (Model.UserId == (int)ViewBag.UserId || isAdmin))
+                {
+                    <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-warning">Güncelle</a>
+                    <form asp-action="Delete" method="post" class="d-inline" data-confirm="Silmek istediğinize emin misiniz?">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit"
+                                class="btn btn-outline-danger"
+                                >
+                            Sil
+                        </button>
+                    </form>
+                }
+            </div>
+            *@
+        </div>
+    </div>
+
+    @if (hasImage)
+    {
+        <div id="detailLightbox" class="detail-lightbox" aria-hidden="true">
+            <button type="button" class="detail-lightbox-close" id="detailLightboxClose" aria-label="Gorseli kapat">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <img src="@Model.ImageUrl" alt="Gonderi gorseli buyuk" />
+        </div>
+    }
+
+    <div class="card border-0 comment-card mb-4">
+        <div class="card-body p-4">
+            <h4 class="mb-3">Yorum Ekle</h4>
+
+            <form asp-controller="Comment" asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="blogPostId" value="@Model.Id" />
+
+                <div class="mb-3">
+                    <textarea name="content" class="form-control comment-input" rows="4" placeholder="Bu konu hakkinda ne dusunuyorsun?" @(isBanned ? "disabled" : "")></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary" @(isBanned ? "disabled" : "")>Yorum Gönder</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="commentsSection" class="card border-0 comment-card">
+        <div class="card-body p-4">
+            <div class="comment-header mb-3">
+                <div>
+                    <h4 class="mb-0">Yorumlar</h4>
+                    <div class="comment-count">@commentCount yorum</div>
+                </div>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <select name="sort" class="form-select form-select-sm" style="min-width:160px;">
+                        @if (commentSort == "old")
+                        {
+                            <option value="new">Yeni -> Eski</option>
+                            <option value="old" selected>Eski -> Yeni</option>
+                            <option value="top">En Beğenilen</option>
+                        }
+                        else if (commentSort == "top")
+                        {
+                            <option value="new">Yeni -> Eski</option>
+                            <option value="old">Eski -> Yeni</option>
+                            <option value="top" selected>En Beğenilen</option>
+                        }
+                        else
+                        {
+                            <option value="new" selected>Yeni -> Eski</option>
+                            <option value="old">Eski -> Yeni</option>
+                            <option value="top">En Beğenilen</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Sırala</button>
+                </form>
+            </div>
+
+            @if (orderedComments.Any())
+            {
+                @foreach (var comment in orderedComments)
+                {
+                    var depth = GetDepth(comment);
+                    var visualDepth = depth > MaxVisualDepth ? MaxVisualDepth : depth;
+                    var marginLeft = visualDepth * 24;
+                    var parentUserName = comment.ParentCommentId.HasValue && commentById.TryGetValue(comment.ParentCommentId.Value, out var parentComment)
+                        ? parentComment.User?.UserName
+                        : null;
+                    var commentLikeCount = comment.Likes?.Count ?? 0;
+                    var commentHasLiked = likedCommentIds.Contains(comment.Id);
+                    var canDeleteComment = canModerateComments || comment.UserId == currentUserId;
+                    var canReply = depth < MaxReplyDepth;
+
+                    <div class="comment-item @(depth > 0 ? "nested" : "")" style="margin-left:@(marginLeft)px;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>
+                                <partial name="_UserProfileChip" view-data='new ViewDataDictionary(ViewData) {
+                                    ["Username"] = comment.User?.UserName,
+                                    ["ProfileImageUrl"] = comment.User?.ProfileImageUrl
+                                }' />
+                            </strong>
+                            <small class="text-muted">@comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(parentUserName))
+                        {
+                            <div class="small text-primary mb-1">@($"@{parentUserName}") kişisine yanıt</div>
+                        }
+
+                        <div class="comment-body">@comment.Content</div>
+
+                        <div class="d-flex flex-wrap gap-2">
+                            <form asp-controller="Comment" asp-action="ToggleLike" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="blogPostId" value="@Model.Id" />
+                                <input type="hidden" name="commentId" value="@comment.Id" />
+                                <button class="btn btn-sm @(commentHasLiked ? "btn-danger" : "btn-outline-danger")" type="submit" @(isBanned ? "disabled" : "")>
+                                    @(commentHasLiked ? "Beğendin" : "Beğen") (@commentLikeCount)
+                                </button>
+                            </form>
+
+                            @if (canReply && !isBanned)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#replyForm-@comment.Id" aria-expanded="false">
+                                    Yanıtla
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" type="button" disabled>
+                                    @(isBanned ? "Banlı" : "Yanıt sınırı")
+                                </button>
+                            }
+
+                            @if (canDeleteComment)
+                            {
+                                <button class="btn btn-sm btn-outline-danger" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#deleteForm-@comment.Id" aria-expanded="false">
+                                    Sil
+                                </button>
+                            }
+                        </div>
+
+                        <div class="collapse mt-2" id="replyForm-@comment.Id">
+                            <form asp-controller="Comment" asp-action="Create" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="blogPostId" value="@Model.Id" />
+                                <input type="hidden" name="parentCommentId" value="@comment.Id" />
+                                <div class="input-group">
+                                    <input name="content" class="form-control" placeholder="Yanıt yaz..." />
+                                    <button class="btn btn-outline-primary" type="submit">Gönder</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        @if (canDeleteComment)
+                        {
+                            <div class="collapse mt-2" id="deleteForm-@comment.Id">
+                                <form asp-controller="Comment" asp-action="Delete" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="blogPostId" value="@Model.Id" />
+                                    <input type="hidden" name="commentId" value="@comment.Id" />
+                                    <div class="mb-2">
+                                        <textarea name="reason" class="form-control" rows="2" placeholder="Silme açıklamasını yaz..." required></textarea>
+                                    </div>
+                                    <button class="btn btn-sm btn-danger" type="submit">Yorumu Sil</button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-info mb-0">
+                    Henüz yorum yapılmamış.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const returnUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(returnUrl));
+            const detailsPageUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(detailsPageUrl));
+            const commentsReturnUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(commentsReturnUrl));
+
+            document.querySelectorAll(".detail-back-link").forEach(function (link) {
+                if (link) {
+                    link.setAttribute("href", returnUrl);
+                }
+            });
+
+            function upsertHidden(form, name, value) {
+                if (!form || !name) return;
+                let input = form.querySelector('input[name="' + name + '"]');
+                if (!input) {
+                    input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = name;
+                    form.appendChild(input);
+                }
+                input.value = value;
+            }
+
+            document.querySelectorAll("form[action*='/Comment/Create'], form[action*='/Comment/ToggleLike'], form[action*='/Comment/Delete']").forEach(function (form) {
+                upsertHidden(form, "returnUrl", commentsReturnUrl);
+            });
+
+            const sortForm = document.querySelector("#commentsSection .comment-header form[method='get']");
+            if (sortForm) {
+                upsertHidden(sortForm, "returnUrl", returnUrl);
+            }
+
+            const lightbox = document.getElementById("detailLightbox");
+            const lightboxTrigger = document.getElementById("detailImageTrigger");
+            const lightboxClose = document.getElementById("detailLightboxClose");
+
+            if (lightbox && lightboxTrigger && lightboxClose) {
+                const closeLightbox = function () {
+                    lightbox.classList.remove("is-open");
+                    lightbox.setAttribute("aria-hidden", "true");
+                    document.body.style.overflow = "";
+                };
+
+                lightboxTrigger.addEventListener("click", function () {
+                    lightbox.classList.add("is-open");
+                    lightbox.setAttribute("aria-hidden", "false");
+                    document.body.style.overflow = "hidden";
+                });
+
+                lightboxClose.addEventListener("click", closeLightbox);
+
+                lightbox.addEventListener("click", function (event) {
+                    if (event.target === lightbox) {
+                        closeLightbox();
+                    }
+                });
+
+                document.addEventListener("keydown", function (event) {
+                    if (event.key === "Escape" && lightbox.classList.contains("is-open")) {
+                        closeLightbox();
+                    }
+                });
+            }
+        })();
+    </script>
+}

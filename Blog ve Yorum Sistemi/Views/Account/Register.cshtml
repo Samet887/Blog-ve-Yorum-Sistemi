@@ -1,0 +1,137 @@
+@model BireyselHesaplar.Models.User
+
+@{
+    ViewData["Title"] = "Kayıt Ol";
+    ViewData["HideChrome"] = true;
+}
+
+<style>
+    .auth-wrap {
+        position: relative;
+        overflow: hidden;
+        border-radius: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+            linear-gradient(135deg, rgba(2, 6, 23, 0.82), rgba(15, 23, 42, 0.68)),
+            url("https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2200&q=80") center/cover no-repeat;
+        box-shadow: none;
+        border: 0;
+    }
+
+    .auth-glass {
+        width: min(560px, 100%);
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.1));
+        backdrop-filter: blur(11px);
+        -webkit-backdrop-filter: blur(11px);
+        box-shadow: 0 18px 36px rgba(2, 6, 23, 0.35);
+    }
+
+    .auth-title {
+        font-size: clamp(1.8rem, 3vw, 2.2rem);
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 6px;
+        letter-spacing: -0.4px;
+    }
+
+    .auth-subtitle {
+        color: rgba(241, 245, 249, 0.88);
+        margin-bottom: 20px;
+    }
+
+    .auth-label {
+        color: #e2e8f0;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .auth-input {
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.52);
+        background: rgba(255, 255, 255, 0.92);
+        min-height: 46px;
+    }
+
+    .auth-input:focus {
+        border-color: #22d3ee;
+        box-shadow: 0 0 0 0.2rem rgba(34, 211, 238, 0.24);
+    }
+
+    .auth-btn {
+        border: none;
+        border-radius: 12px;
+        min-height: 48px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #0ea5e9, #2563eb);
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.35);
+    }
+
+    .auth-btn:hover {
+        filter: brightness(1.04);
+    }
+
+    .auth-link {
+        color: #bfdbfe;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .auth-link:hover {
+        color: #dbeafe;
+        text-decoration: underline;
+    }
+</style>
+
+<div class="auth-wrap">
+    <div class="auth-glass p-4 p-md-5">
+        <h1 class="auth-title">Hemen Katıl</h1>
+        <p class="auth-subtitle">Dakikalar içinde hesabını oluştur ve paylaşmaya başla.</p>
+
+        <form method="post" novalidate>
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="FullName" class="form-label auth-label">Ad Soyad</label>
+                    <input asp-for="FullName" class="form-control auth-input" placeholder="Ad Soyad" autocomplete="name" />
+                    <span asp-validation-for="FullName" class="text-warning small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="UserName" class="form-label auth-label">Kullanıcı Adı</label>
+                    <input asp-for="UserName" class="form-control auth-input" placeholder="kullaniciadi" autocomplete="username" />
+                    <span asp-validation-for="UserName" class="text-warning small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="Email" class="form-label auth-label">E-posta</label>
+                    <input asp-for="Email" class="form-control auth-input" placeholder="mail@ornek.com" autocomplete="email" />
+                    <span asp-validation-for="Email" class="text-warning small"></span>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="PasswordHash" class="form-label auth-label">Şifre</label>
+                    <input asp-for="PasswordHash" type="password" class="form-control auth-input" placeholder="••••••••" autocomplete="new-password" />
+                    <span asp-validation-for="PasswordHash" class="text-warning small"></span>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary auth-btn w-100 mt-4 mb-3">Kayıt Ol</button>
+
+            <div class="text-center text-white-50">
+                Zaten hesabın var mı?
+                <a class="auth-link" asp-controller="Account" asp-action="Login">Giriş yap</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

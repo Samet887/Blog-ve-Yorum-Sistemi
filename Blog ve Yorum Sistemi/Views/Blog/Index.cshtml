@@ -1,0 +1,1333 @@
+@model List<BireyselHesaplar.Models.BlogPost>
+@using BireyselHesaplar.Models
+@using BireyselHesaplar.Utilities
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Ana Sayfa";
+
+    var isAuthenticated = ViewBag.IsAuthenticated != null && (bool)ViewBag.IsAuthenticated;
+    var isAdmin = ViewBag.IsAdmin != null && (bool)ViewBag.IsAdmin;
+    var currentUserId = ViewBag.UserId != null ? (int)ViewBag.UserId : 0;
+    var likedBlogIds = ViewBag.LikedBlogIds as System.Collections.Generic.HashSet<int>
+        ?? new System.Collections.Generic.HashSet<int>();
+    var filterQuery = ViewBag.FilterQuery as string ?? string.Empty;
+    var filterAuthor = ViewBag.FilterAuthor as string ?? string.Empty;
+    var filterSort = ViewBag.FilterSort as string ?? "new";
+    var filterQuick = ViewBag.FilterQuick as string ?? "all";
+    var filterCategory = ViewBag.FilterCategory as string ?? "all";
+    var filterFrom = ViewBag.FilterFrom as string ?? string.Empty;
+    var filterTo = ViewBag.FilterTo as string ?? string.Empty;
+    var filterMine = ViewBag.FilterMine != null && (bool)ViewBag.FilterMine;
+    var categories = ViewBag.Categories as List<Category> ?? new List<Category>();
+    var categoryCounts = ViewBag.CategoryCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+    var activeBan = ViewBag.ActiveBan as UserBan;
+    var isBanned = activeBan != null;
+
+    var posts = Model ?? new List<BlogPost>();
+    var tr = new CultureInfo("tr-TR");
+
+    bool IsImagePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return value.Contains(".jpg", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".png", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".webp", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".gif", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    int CategoryCount(string key)
+    {
+        return categoryCounts.TryGetValue(key, out var value) ? value : 0;
+    }
+
+    string BuildFeedExcerptHtml(string? htmlContent)
+    {
+        if (string.IsNullOrWhiteSpace(htmlContent))
+            return string.Empty;
+
+        return TextFormat.ToExcerptHtml(htmlContent, 220);
+    }
+
+    string CategoryLabel(string? slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+            return "Genel";
+
+        var match = categories.FirstOrDefault(x => string.Equals(x.Slug, slug, StringComparison.OrdinalIgnoreCase));
+        return match?.Name ?? "Genel";
+    }
+
+    if (!categories.Any())
+    {
+        categories = new List<Category>
+        {
+            new Category { Name = "Teknoloji", Slug = "teknoloji" },
+            new Category { Name = "Yazilim", Slug = "yazilim" },
+            new Category { Name = "Tasarim", Slug = "tasarim" },
+            new Category { Name = "Yasam", Slug = "yasam" },
+            new Category { Name = "Kariyer/Is", Slug = "is" }
+        };
+    }
+
+    var fallbackImage = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2200&q=80";
+    var fallbackAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='%23e4e8f3'/><circle cx='60' cy='45' r='20' fill='%23566586'/><rect x='28' y='72' width='64' height='26' rx='13' fill='%23566586'/></svg>";
+
+    var sortOptions = new[]
+    {
+        new { Value = "new", Label = "Yeni" },
+        new { Value = "popular", Label = "Populer" },
+        new { Value = "commented", Label = "Cok Yorumlanan" },
+        new { Value = "old", Label = "Eski" }
+    };
+
+    var quickOptions = new[]
+    {
+        new { Value = "all", Label = "Tum Akis" },
+        new { Value = "24h", Label = "Son 24 Saat" },
+        new { Value = "week", Label = "Bu Hafta" },
+        new { Value = "flagged", Label = "Incelenecek" }
+    };
+
+    var categoryOptions = new List<(string Value, string Label, int Count)>
+    {
+        ("all", "Tum Kategoriler", posts.Count)
+    };
+    categoryOptions.AddRange(categories.Select(x => (x.Slug, x.Name, CategoryCount(x.Slug))));
+    var showFiltersInitially =
+        !string.IsNullOrWhiteSpace(filterQuery)
+        || !string.IsNullOrWhiteSpace(filterAuthor)
+        || !string.IsNullOrWhiteSpace(filterFrom)
+        || !string.IsNullOrWhiteSpace(filterTo)
+        || filterMine
+        || !string.Equals(filterSort, "new", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(filterQuick, "all", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(filterCategory, "all", StringComparison.OrdinalIgnoreCase);
+
+    string BuildFeedUrl(
+        string? sortOverride = null,
+        string? quickOverride = null,
+        string? categoryOverride = null,
+        bool? mineOverride = null)
+    {
+        var queryItems = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(filterQuery))
+            queryItems.Add($"q={Uri.EscapeDataString(filterQuery)}");
+        if (!string.IsNullOrWhiteSpace(filterAuthor))
+            queryItems.Add($"author={Uri.EscapeDataString(filterAuthor)}");
+        if (!string.IsNullOrWhiteSpace(filterFrom))
+            queryItems.Add($"from={Uri.EscapeDataString(filterFrom)}");
+        if (!string.IsNullOrWhiteSpace(filterTo))
+            queryItems.Add($"to={Uri.EscapeDataString(filterTo)}");
+
+        var resolvedMine = mineOverride ?? filterMine;
+        if (resolvedMine)
+            queryItems.Add("mine=true");
+
+        var resolvedSort = string.IsNullOrWhiteSpace(sortOverride) ? filterSort : sortOverride;
+        queryItems.Add($"sort={Uri.EscapeDataString(resolvedSort)}");
+
+        var resolvedQuick = string.IsNullOrWhiteSpace(quickOverride) ? filterQuick : quickOverride;
+        if (!string.Equals(resolvedQuick, "all", StringComparison.OrdinalIgnoreCase))
+            queryItems.Add($"quick={Uri.EscapeDataString(resolvedQuick)}");
+
+        var resolvedCategory = string.IsNullOrWhiteSpace(categoryOverride) ? filterCategory : categoryOverride;
+        if (!string.Equals(resolvedCategory, "all", StringComparison.OrdinalIgnoreCase))
+            queryItems.Add($"category={Uri.EscapeDataString(resolvedCategory)}");
+
+        return $"{Url.Action("Index", "Blog")}?{string.Join("&", queryItems)}";
+    }
+}
+
+<style>
+    :root {
+        --feed-bg: var(--app-cream);
+        --feed-surface: #ffffff;
+        --feed-border: #dbe3f0;
+        --feed-ink: var(--app-ink);
+        --feed-muted: #64748b;
+        --feed-dark: var(--app-dark);
+        --feed-purple: var(--app-purple);
+        --feed-green: var(--app-green);
+        --feed-danger: var(--app-danger);
+    }
+
+    body {
+        background: var(--feed-bg);
+    }
+
+    .feed-page {
+        width: min(100%, 1380px);
+        margin: 0 auto;
+        padding: 18px 18px 28px;
+    }
+
+    .feed-hero {
+        position: relative;
+        isolation: isolate;
+        border: 1px solid #2e3d62;
+        border-radius: 18px;
+        overflow: hidden;
+        min-height: 320px;
+        background-size: cover;
+        background-position: center;
+        padding: 30px;
+        color: #fff;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .feed-hero-image-layer {
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        transform: scale(1.03);
+        opacity: 1;
+        transition: opacity .8s ease, transform 10s linear;
+    }
+
+    .feed-hero-image-layer.is-transitioning {
+        opacity: .42;
+        transform: scale(1.08);
+    }
+
+    .feed-hero > :not(.feed-hero-image-layer) {
+        position: relative;
+        z-index: 1;
+    }
+
+    .feed-hero-content {
+        display: flex;
+        flex-direction: column;
+        min-height: 260px;
+    }
+
+    .feed-hero-kicker {
+        margin: 0 0 10px;
+        font-size: .78rem;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: rgba(226, 232, 240, .9);
+    }
+
+    .feed-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: linear-gradient(108deg, rgba(26, 30, 43, .9), rgba(47, 60, 95, .72));
+    }
+
+    .feed-hero-title {
+        margin: 0;
+        font-size: clamp(2.25rem, 5vw, 4rem);
+        line-height: .98;
+        color: #f8fafc;
+        text-shadow: 0 8px 26px rgba(15, 23, 42, .45);
+        letter-spacing: .01em;
+    }
+
+    .feed-hero-title-main {
+        color: #10b981;
+    }
+
+    .feed-hero-title em {
+        font-style: normal;
+        color: #c7d2fe;
+        text-shadow: 0 10px 30px rgba(79, 70, 229, .38);
+    }
+
+    .feed-hero-subtitle {
+        margin: 12px 0 0;
+        max-width: 700px;
+        color: rgba(241, 245, 249, .92);
+        font-size: 1.06rem;
+        line-height: 1.6;
+    }
+
+    .feed-hero-actions {
+        margin-top: auto;
+        padding-top: 22px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .hero-btn {
+        min-height: 44px;
+        border-radius: 12px;
+        padding: 0 15px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        font-weight: 800;
+        letter-spacing: .01em;
+    }
+
+    .hero-btn-primary {
+        border: 1px solid #fff;
+        background: #fff;
+        color: #1a1e2b;
+    }
+
+    .hero-btn-primary:hover {
+        color: #1a1e2b;
+        background: #edf2ff;
+    }
+
+    .hero-btn-secondary {
+        border: 1px solid rgba(255, 255, 255, .36);
+        background: rgba(255, 255, 255, .08);
+        color: #fff;
+    }
+
+    .hero-btn-secondary:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, .16);
+    }
+
+    .feed-tools {
+        margin-top: 0;
+        border-top: 0 solid transparent;
+        border-bottom: 0 solid transparent;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+        transition: max-height .25s ease, opacity .2s ease, margin-top .2s ease, padding .2s ease, border-width .2s ease;
+    }
+
+    .feed-tools.is-visible {
+        margin-top: 16px;
+        border-top-width: 1px;
+        border-bottom-width: 1px;
+        border-top-color: #e2e8f5;
+        border-bottom-color: #e2e8f5;
+        padding: 14px 0;
+        max-height: 1300px;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .feed-tools-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(240px, .56fr) minmax(130px, auto) auto minmax(150px, auto);
+        gap: 9px;
+        align-items: center;
+    }
+
+    .feed-input {
+        min-height: 44px;
+        border: 1px solid var(--feed-border);
+        border-radius: 12px;
+        background: #fff;
+        color: var(--feed-ink);
+        padding: 0 13px;
+    }
+
+    .feed-input::placeholder {
+        color: #8a97b4;
+    }
+
+    .feed-action-btn {
+        min-height: 44px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        padding: 0 15px;
+        font-weight: 800;
+        letter-spacing: .01em;
+        text-transform: uppercase;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+    }
+
+    .feed-action-btn.primary {
+        background: var(--feed-dark);
+        border-color: var(--feed-dark);
+        color: #fff;
+    }
+
+    .feed-action-btn.primary:hover {
+        background: #111827;
+        border-color: #111827;
+        color: #fff;
+    }
+
+    .feed-action-btn.secondary {
+        background: #fff;
+        border-color: var(--feed-border);
+        color: var(--feed-ink);
+    }
+
+    .feed-action-btn.secondary:hover {
+        background: #f7f9ff;
+        border-color: #cad5ea;
+        color: #1f2d4a;
+    }
+
+    .chip-strip {
+        display: grid;
+        gap: 9px;
+    }
+
+    .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .chip-label {
+        width: 130px;
+        flex: 0 0 130px;
+        color: #5c6a88;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        align-self: center;
+    }
+
+    .chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex: 1 1 auto;
+    }
+
+    .feed-chip {
+        border: 1px solid var(--feed-border);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--feed-ink);
+        font-size: .82rem;
+        font-weight: 800;
+        text-decoration: none;
+        padding: 7px 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .feed-chip.active {
+        border-color: var(--feed-purple);
+        background: var(--feed-purple);
+        color: #fff;
+    }
+
+    .feed-chip.count span {
+        color: #7482a2;
+        font-weight: 700;
+    }
+
+    .feed-chip.count.active span {
+        color: #dce4ff;
+    }
+
+    .feed-grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.58fr) minmax(320px, .92fr);
+        gap: 16px;
+    }
+
+    .feature-post {
+        border: 1px solid var(--feed-border);
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--feed-surface);
+        display: grid;
+        grid-template-columns: minmax(280px, 46%) minmax(0, 54%);
+        min-height: 348px;
+    }
+
+    .feature-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .feature-content {
+        padding: 18px 20px;
+        display: grid;
+        gap: 12px;
+        align-content: start;
+    }
+
+    .feature-kicker {
+        margin: 0;
+        color: #65748f;
+        font-size: .8rem;
+        font-weight: 800;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+
+    .feature-title {
+        margin: 0;
+        font-size: clamp(1.65rem, 3vw, 2.35rem);
+        line-height: 1.14;
+    }
+
+    .feature-title a {
+        text-decoration: none;
+        color: #1f2d4a;
+    }
+
+    .feature-author {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: #5f6f8d;
+        font-size: .95rem;
+        flex-wrap: wrap;
+    }
+
+    .feature-author img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .feature-excerpt {
+        color: #3d4c6b;
+        line-height: 1.65;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .feature-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        margin-top: 2px;
+    }
+
+    .feature-stats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        color: #5f6f8d;
+        font-size: .87rem;
+    }
+
+    .feature-stats i {
+        color: var(--feed-purple);
+    }
+
+    .rising-panel {
+        border: 1px solid var(--feed-border);
+        border-radius: 16px;
+        background: var(--feed-surface);
+        padding: 16px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+    }
+
+    .rising-title {
+        margin: 0;
+        font-size: 2rem;
+        line-height: 1;
+        color: #1f2d4a;
+    }
+
+    .rising-item {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        text-decoration: none;
+        color: var(--feed-ink);
+        padding: 9px 0;
+        border-top: 1px solid #e8eef8;
+    }
+
+    .rising-item:first-of-type {
+        border-top: none;
+        padding-top: 4px;
+    }
+
+    .rising-thumb {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 1px solid #d7dfef;
+    }
+
+    .rising-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .rising-item-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.28;
+        color: #1f2d4a;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .rising-item-author {
+        margin-top: 2px;
+        color: #637494;
+        font-size: .88rem;
+    }
+
+    .rising-item-stats {
+        color: #617394;
+        white-space: nowrap;
+        font-size: .86rem;
+    }
+
+    .rising-item-stats i {
+        color: var(--feed-purple);
+    }
+
+    .feed-list {
+        margin-top: 16px;
+        display: grid;
+        gap: 14px;
+    }
+
+    .feed-article {
+        border: 1px solid var(--feed-border);
+        border-radius: 16px;
+        background: #fff;
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+    }
+
+    .feed-article.hide-by-load {
+        display: none;
+    }
+
+    .feed-article-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid #e9eff9;
+        padding-bottom: 10px;
+    }
+
+    .feed-author {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+    }
+
+    .feed-author img {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .feed-author-main {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+
+    .feed-author-name {
+        font-weight: 700;
+        color: #22314f;
+    }
+
+    .feed-author-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .feed-author-link:hover .feed-author-name {
+        text-decoration: underline;
+    }
+
+    .feed-category-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        border: 1px solid #d7deef;
+        background: #f7f9ff;
+        color: #4f607f;
+        font-size: .74rem;
+        font-weight: 700;
+        padding: 4px 9px;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+
+    .feed-date {
+        font-size: .84rem;
+        color: #6a7998;
+        white-space: nowrap;
+    }
+
+    .feed-top-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .feed-edit-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #d7deef;
+        border-radius: 999px;
+        background: #fff;
+        color: #334155;
+        text-decoration: none;
+        font-size: .78rem;
+        font-weight: 800;
+        padding: 5px 10px;
+    }
+
+    .feed-edit-btn:hover {
+        background: #f1f5ff;
+        border-color: #c8d3ee;
+        color: #1f2d4a;
+    }
+
+    .feed-article-title {
+        margin: 0;
+        font-size: clamp(1.35rem, 2.2vw, 1.95rem);
+        line-height: 1.18;
+    }
+
+    .feed-article-title a {
+        color: #1f2d4a;
+        text-decoration: none;
+    }
+
+    .feed-article-main {
+        display: grid;
+        grid-template-columns: 236px minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .feed-article-main.no-image {
+        grid-template-columns: 1fr;
+    }
+
+    .feed-article-content {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .feed-cover {
+        border: 1px solid #d7dfef;
+        border-radius: 12px;
+        overflow: hidden;
+        aspect-ratio: 4 / 3;
+        align-self: start;
+    }
+
+    .feed-cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .feed-excerpt {
+        color: #3d4b69;
+        line-height: 1.68;
+        display: -webkit-box;
+        -webkit-line-clamp: 5;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .feed-excerpt em,
+    .feed-excerpt i {
+        font-style: italic;
+    }
+
+    .feed-excerpt strong,
+    .feed-excerpt b {
+        font-weight: 700;
+    }
+
+    .feed-excerpt u {
+        text-decoration: underline;
+    }
+
+    .feed-excerpt ul,
+    .feed-excerpt ol {
+        margin: 0;
+        padding-left: 1.2rem;
+    }
+
+    .feed-article-footer {
+        border-top: 1px solid #e9eff9;
+        padding-top: 11px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .feed-meta-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .feed-meta-pill {
+        border: 1px solid #d7deef;
+        border-radius: 999px;
+        background: #f7f9ff;
+        color: #536283;
+        font-size: .82rem;
+        font-weight: 700;
+        padding: 6px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .feed-meta-pill i {
+        color: var(--feed-purple);
+    }
+
+    .feed-meta-pill-link {
+        text-decoration: none;
+    }
+
+    .feed-meta-pill-link:hover {
+        text-decoration: none;
+        background: #eef3ff;
+    }
+
+    .feed-meta-pill-like {
+        border: 1px solid #d7deef;
+        border-radius: 999px;
+        background: #f7f9ff;
+        color: #536283;
+        font-size: .82rem;
+        font-weight: 700;
+        padding: 6px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: .16s ease;
+    }
+
+    .feed-meta-pill-like:hover {
+        background: #eef3ff;
+    }
+
+    .feed-meta-pill-like:disabled {
+        opacity: .65;
+        cursor: not-allowed;
+    }
+
+    .feed-meta-pill-like.liked {
+        background: var(--feed-purple);
+        border-color: var(--feed-purple);
+        color: #fff;
+    }
+
+    .feed-meta-pill-like.liked i {
+        color: #fff;
+    }
+
+    .feed-load-wrap {
+        margin-top: 12px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .empty-state {
+        margin-top: 18px;
+        border: 1px dashed #cbd6ea;
+        border-radius: 16px;
+        background: #f7faff;
+        color: #64748b;
+        text-align: center;
+        padding: 42px 18px;
+    }
+
+    @@media (max-width: 1200px) {
+        .feed-page {
+            padding: 14px;
+        }
+
+        .feed-tools-form {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+        }
+    }
+
+    @@media (max-width: 1024px) {
+        .feed-hero {
+            min-height: 0;
+        }
+
+        .feed-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .feature-post {
+            grid-template-columns: 1fr;
+            min-height: 0;
+        }
+
+        .feed-article-main {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .feed-tools-form {
+            grid-template-columns: 1fr;
+        }
+
+        .chip-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 7px;
+        }
+
+        .chip-label {
+            width: auto;
+            flex: 0 0 auto;
+        }
+
+    }
+</style>
+
+<div class="feed-page">
+    @Html.AntiForgeryToken()
+
+    @if (isBanned)
+    {
+        <div class="alert alert-danger mb-3">
+            Hesabin kisitli oldugu icin yeni gonderi paylasamaz ve gonderi begenemezsin.
+            Kisit bitis: @activeBan!.ExpiresAt.ToString("dd.MM.yyyy HH:mm")
+        </div>
+    }
+
+    <section id="feedHero" class="feed-hero" data-hero-default="@fallbackImage">
+        <div id="feedHeroImageLayer" class="feed-hero-image-layer" aria-hidden="true"></div>
+        <div class="feed-hero-content">
+            <p class="feed-hero-kicker">Editorial Platform</p>
+            <h1 class="feed-hero-title"><span class="feed-hero-title-main">Blogg</span> <em>App</em></h1>
+            <p class="feed-hero-subtitle">
+                Hikayeni guclu bir vitrine tasiyan, sade ama etkili bir yazi deneyimi.
+            </p>
+
+            <div class="feed-hero-actions">
+                @if (isAuthenticated)
+                {
+                    <a asp-action="Create" class="hero-btn hero-btn-primary @(isBanned ? "disabled" : "")">
+                        <i class="bi bi-pencil-square"></i> Yeni Gonderi
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="Account" asp-action="Login" class="hero-btn hero-btn-primary">
+                        <i class="bi bi-box-arrow-in-right"></i> Giris Yap
+                    </a>
+                }
+                <button type="button" id="openFiltersBtn" class="hero-btn hero-btn-secondary" aria-expanded="@(showFiltersInitially ? "true" : "false")" aria-controls="feedFilters">
+                    <i class="bi bi-funnel"></i> Filtrelere Git
+                </button>
+            </div>
+        </div>
+
+    </section>
+
+    <section id="feedFilters" class="feed-tools @(showFiltersInitially ? "is-visible" : "")">
+        <form method="get" class="feed-tools-form">
+            <input name="q" value="@filterQuery" class="feed-input" placeholder="Baslik veya icerik ara" autocomplete="off" />
+            <input name="author" value="@filterAuthor" class="feed-input" placeholder="Yazar ara" />
+            <input name="from" value="@filterFrom" type="date" class="feed-input" />
+            <input name="to" value="@filterTo" type="date" class="feed-input" />
+            <button type="submit" class="feed-action-btn primary"><i class="bi bi-check2-circle"></i> Uygula</button>
+
+            <input type="hidden" name="sort" value="@filterSort" />
+            <input type="hidden" name="quick" value="@filterQuick" />
+            <input type="hidden" name="category" value="@filterCategory" />
+            @if (filterMine)
+            {
+                <input type="hidden" name="mine" value="true" />
+            }
+        </form>
+
+        <div class="feed-tools-form" style="grid-template-columns:minmax(0,1fr) auto;gap:9px;">
+            <a asp-action="Index" class="feed-action-btn secondary">
+                <i class="bi bi-arrow-clockwise"></i> Temizle
+            </a>
+            @if (isAuthenticated)
+            {
+                <a asp-action="Create" class="feed-action-btn primary @(isBanned ? "disabled" : "")">
+                    <i class="bi bi-plus-lg"></i> Yeni Gonderi
+                </a>
+            }
+            else
+            {
+                <a asp-controller="Account" asp-action="Login" class="feed-action-btn primary">
+                    <i class="bi bi-box-arrow-in-right"></i> Giris Yap
+                </a>
+            }
+        </div>
+
+        <div class="chip-strip">
+            <div class="chip-row">
+                <div class="chip-label">Hizli</div>
+                <div class="chip-list">
+                    @foreach (var quickOption in quickOptions)
+                    {
+                        <a href="@BuildFeedUrl(quickOverride: quickOption.Value)" class="feed-chip @(filterQuick == quickOption.Value ? "active" : "")">
+                            @quickOption.Label
+                        </a>
+                    }
+                    @if (isAuthenticated)
+                    {
+                        <a href="@BuildFeedUrl(mineOverride: !filterMine)" class="feed-chip @(filterMine ? "active" : "")">
+                            <i class="bi bi-person"></i> Sadece Benim
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="chip-row">
+                <div class="chip-label">Kategori</div>
+                <div class="chip-list">
+                    @foreach (var categoryOption in categoryOptions)
+                    {
+                        <a href="@BuildFeedUrl(categoryOverride: categoryOption.Value)" class="feed-chip count @(filterCategory == categoryOption.Value ? "active" : "")">
+                            @categoryOption.Label
+                            <span>@categoryOption.Count</span>
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="chip-row">
+                <div class="chip-label">Siralama</div>
+                <div class="chip-list">
+                    @foreach (var sortOption in sortOptions)
+                    {
+                        <a href="@BuildFeedUrl(sortOverride: sortOption.Value)" class="feed-chip @(filterSort == sortOption.Value ? "active" : "")">
+                            @sortOption.Label
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (posts.Any())
+    {
+        <section id="feedList" class="feed-list">
+            @foreach (var item in posts)
+            {
+                var commentCount = item.Comments?.Count ?? 0;
+                var likeCount = item.Likes?.Count ?? 0;
+                var hasLiked = likedBlogIds.Contains(item.Id);
+                var hasImage = IsImagePath(item.ImageUrl);
+                var excerptHtml = BuildFeedExcerptHtml(item.Content);
+                var hasContent = !string.IsNullOrWhiteSpace(TextFormat.StripHtml(excerptHtml));
+                var categoryName = CategoryLabel(item.CategorySlug);
+                var detailsReturnUrl = $"{Context.Request.Path}{Context.Request.QueryString}#post-{item.Id}";
+                var authorUserName = item.User?.UserName ?? "Kullanici";
+                var canEditPost = isAdmin || item.UserId == currentUserId;
+
+                <article id="post-@item.Id" class="feed-article js-feed-item" data-post-id="@item.Id">
+                    <div class="feed-article-top">
+                        <div class="feed-author">
+                            <img src="@(item.User?.ProfileImageUrl ?? fallbackAvatar)" alt="Profil" onerror="this.onerror=null;this.src='@fallbackAvatar';" />
+                            <span class="feed-author-main">
+                                <a class="feed-author-link" asp-controller="Account" asp-action="UserProfile" asp-route-username="@authorUserName">
+                                    <span class="feed-author-name">@authorUserName</span>
+                                </a>
+                                <span class="feed-category-tag"><i class="bi bi-tag"></i> @categoryName</span>
+                            </span>
+                        </div>
+                        <span class="feed-top-right">
+                            <span class="feed-date">@item.CreatedAt.ToString("dd MMMM yyyy", tr)</span>
+                            @if (canEditPost)
+                            {
+                                <a asp-action="Edit" asp-route-id="@item.Id" class="feed-edit-btn">
+                                    <i class="bi bi-pencil-square"></i> Duzenle
+                                </a>
+                            }
+                        </span>
+                    </div>
+
+                    <div class="feed-article-main @(hasImage ? "" : "no-image")">
+                        @if (hasImage)
+                        {
+                            <a class="feed-cover" asp-action="Details" asp-route-id="@item.Id" asp-route-returnUrl="@detailsReturnUrl">
+                                <img src="@item.ImageUrl" alt="Gonderi gorseli" />
+                            </a>
+                        }
+
+                        <div class="feed-article-content">
+                            <h2 class="feed-article-title">
+                                <a asp-action="Details" asp-route-id="@item.Id" asp-route-returnUrl="@detailsReturnUrl">@Html.Raw(TextFormat.SanitizeHtml(item.Title))</a>
+                            </h2>
+
+                            <div class="feed-excerpt">
+                                @if (hasContent)
+                                {
+                                    @Html.Raw(excerptHtml)
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Henuz icerik yok.</span>
+                                }
+                            </div>
+
+                            <div class="feed-article-footer">
+                                <div class="feed-meta-list">
+                                    <button type="button"
+                                            class="feed-meta-pill-like @(hasLiked ? "liked" : "")"
+                                            data-like-button="@item.Id"
+                                    @((isBanned || !isAuthenticated) ? "disabled" : "")>
+                                        <i class="bi @(hasLiked ? "bi-heart-fill" : "bi-heart")" data-like-icon="@item.Id"></i>
+                                        <span data-like-count="@item.Id">@likeCount</span> begeni
+                                    </button>
+
+                                    <a asp-action="Details"
+                                       asp-route-id="@item.Id"
+                                       asp-route-returnUrl="@detailsReturnUrl"
+                                       asp-fragment="commentsSection"
+                                       class="feed-meta-pill feed-meta-pill-link">
+                                        <i class="bi bi-chat-left-text"></i> @commentCount yorum
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </section>
+
+        <div class="feed-load-wrap">
+            <button id="loadMoreBtn" type="button" class="feed-action-btn primary">
+                <i class="bi bi-arrow-down-circle"></i> Daha Fazla Goster
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            Filtrelere uygun gonderi bulunamadi.
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+            const csrfToken = tokenInput ? tokenInput.value : "";
+            const feedItems = Array.from(document.querySelectorAll(".js-feed-item"));
+            const loadMoreBtn = document.getElementById("loadMoreBtn");
+            const filtersSection = document.getElementById("feedFilters");
+            const openFiltersBtn = document.getElementById("openFiltersBtn");
+            const heroSection = document.getElementById("feedHero");
+            const heroImageLayer = document.getElementById("feedHeroImageLayer");
+            const scrollStorageKey = "blog-index-scroll::" + window.location.pathname + window.location.search;
+            const pageSize = 6;
+            let visibleCount = 0;
+
+            try {
+                const rawScroll = sessionStorage.getItem(scrollStorageKey);
+                if (rawScroll !== null) {
+                    const parsed = parseInt(rawScroll, 10);
+                    if (!Number.isNaN(parsed)) {
+                        window.requestAnimationFrame(function () {
+                            window.scrollTo(0, parsed);
+                        });
+                    }
+                }
+            } catch (_) {
+                // SesssionStorage desteklenmiyorsa sessizce devam et.
+            }
+
+            function persistScroll() {
+                try {
+                    sessionStorage.setItem(scrollStorageKey, String(window.scrollY || window.pageYOffset || 0));
+                } catch (_) {
+                    // SesssionStorage desteklenmiyorsa sessizce devam et.
+                }
+            }
+
+            window.addEventListener("beforeunload", persistScroll);
+            document.addEventListener("visibilitychange", function () {
+                if (document.visibilityState === "hidden") {
+                    persistScroll();
+                }
+            });
+
+            if (heroSection && heroImageLayer) {
+                const defaultImage = heroSection.getAttribute("data-hero-default") || "";
+                const scenicImages = [
+                    defaultImage,
+                    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2200&q=80",
+                    "https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?auto=format&fit=crop&w=2200&q=80",
+                    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2200&q=80",
+                    "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=2200&q=80"
+                ].filter(function (url, index, arr) {
+                    return !!url && arr.indexOf(url) === index;
+                });
+
+                let imageIndex = 0;
+
+                function applyHeroImage(index, withTransition) {
+                    const url = scenicImages[index];
+                    if (!url) {
+                        return;
+                    }
+
+                    if (withTransition) {
+                        heroImageLayer.classList.add("is-transitioning");
+                        window.setTimeout(function () {
+                            heroImageLayer.style.backgroundImage = "url('" + url.replace(/'/g, "%27") + "')";
+                            heroImageLayer.classList.remove("is-transitioning");
+                        }, 280);
+                    } else {
+                        heroImageLayer.style.backgroundImage = "url('" + url.replace(/'/g, "%27") + "')";
+                    }
+                }
+
+                applyHeroImage(0, false);
+
+                if (scenicImages.length > 1) {
+                    window.setInterval(function () {
+                        imageIndex = (imageIndex + 1) % scenicImages.length;
+                        applyHeroImage(imageIndex, true);
+                    }, 7000);
+                }
+            }
+
+            function showNextBatch() {
+                for (let i = visibleCount; i < Math.min(visibleCount + pageSize, feedItems.length); i++) {
+                    feedItems[i].classList.remove("hide-by-load");
+                }
+
+                visibleCount = Math.min(visibleCount + pageSize, feedItems.length);
+                if (loadMoreBtn && visibleCount >= feedItems.length) {
+                    loadMoreBtn.style.display = "none";
+                }
+            }
+
+            feedItems.forEach(function (item) {
+                item.classList.add("hide-by-load");
+            });
+
+            if (feedItems.length > 0) {
+                showNextBatch();
+            }
+
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener("click", showNextBatch);
+            }
+
+            if (openFiltersBtn && filtersSection) {
+                openFiltersBtn.addEventListener("click", function () {
+                    const isVisible = filtersSection.classList.contains("is-visible");
+                    if (isVisible) {
+                        filtersSection.classList.remove("is-visible");
+                        openFiltersBtn.setAttribute("aria-expanded", "false");
+                        return;
+                    }
+
+                    filtersSection.classList.add("is-visible");
+                    openFiltersBtn.setAttribute("aria-expanded", "true");
+                    filtersSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
+            }
+
+            document.querySelectorAll("[data-like-button]").forEach(function (button) {
+                button.addEventListener("click", async function () {
+                    const postId = button.getAttribute("data-like-button");
+                    if (!postId || !csrfToken || button.disabled) {
+                        return;
+                    }
+
+                    button.disabled = true;
+                    try {
+                        const response = await fetch('@Url.Action("ToggleLikeAjax", "Blog")', {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                                "RequestVerificationToken": csrfToken
+                            },
+                            body: "blogPostId=" + encodeURIComponent(postId)
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok) {
+                            return;
+                        }
+
+                        const likeNode = document.querySelector('[data-like-count="' + postId + '"]');
+                        if (likeNode) {
+                            likeNode.textContent = String(data.likeCount);
+                        }
+
+                        if (data.liked) {
+                            button.classList.add("liked");
+                            const iconNode = document.querySelector('[data-like-icon="' + postId + '"]');
+                            if (iconNode) {
+                                iconNode.classList.remove("bi-heart");
+                                iconNode.classList.add("bi-heart-fill");
+                            }
+                        } else {
+                            button.classList.remove("liked");
+                            const iconNode = document.querySelector('[data-like-icon="' + postId + '"]');
+                            if (iconNode) {
+                                iconNode.classList.remove("bi-heart-fill");
+                                iconNode.classList.add("bi-heart");
+                            }
+                        }
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+            });
+        })();
+    </script>
+}

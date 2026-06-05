@@ -1,0 +1,1190 @@
+@model List<BireyselHesaplar.Models.AdminActionLog>
+@using BireyselHesaplar.Models
+@using BireyselHesaplar.Utilities
+@using System.Globalization
+
+@{
+    ViewData["Title"] = "Yönetici Paneli";
+
+    var users = ViewBag.Users as List<User> ?? new List<User>();
+    var posts = ViewBag.Posts as List<BlogPost> ?? new List<BlogPost>();
+    var comments = ViewBag.Comments as List<Comment> ?? new List<Comment>();
+    var categories = ViewBag.Categories as List<Category> ?? new List<Category>();
+    var categoryCounts = ViewBag.CategoryCounts as Dictionary<string, int> ?? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    var activeAdminPage = ViewBag.ActiveAdminPage as string ?? "overview";
+    var currentUserId = ViewBag.CurrentUserId as int?;
+    var userMap = ViewBag.UserMap as Dictionary<int, string> ?? new Dictionary<int, string>();
+    var currentUserRole = Context.Session.GetString("UserRole") ?? "User";
+    var isSuperAdmin = string.Equals(currentUserRole, "Admin", StringComparison.OrdinalIgnoreCase);
+    var isModerator = string.Equals(currentUserRole, "Moderator", StringComparison.OrdinalIgnoreCase);
+    var categoriesOrdered = categories
+        .OrderBy(x => x.Name)
+        .ToList();
+    var currentAdmin = users.FirstOrDefault(x => currentUserId.HasValue && x.Id == currentUserId.Value);
+    var removableModerators = users
+        .Where(x => string.Equals(x.Role, "Moderator", StringComparison.OrdinalIgnoreCase)
+            && (!currentUserId.HasValue || x.Id != currentUserId.Value))
+        .OrderBy(x => x.UserName)
+        .ToList();
+    var canRemoveModerator = removableModerators.Any();
+    var tr = new CultureInfo("tr-TR");
+
+    var now = DateTime.Now;
+    var sevenDaysAgo = now.AddDays(-7);
+    var thirtyDaysAgo = now.AddDays(-30);
+    var recentUsers7 = users.Count(x => x.CreatedAt >= sevenDaysAgo);
+    var recentUsers30 = users.Count(x => x.CreatedAt >= thirtyDaysAgo);
+    var recentPosts7 = posts.Count(x => x.CreatedAt >= sevenDaysAgo);
+    var recentPosts30 = posts.Count(x => x.CreatedAt >= thirtyDaysAgo);
+    var userTrendPercent = recentUsers30 > 0 ? Math.Round((recentUsers7 / (double)recentUsers30) * 100d) : 0;
+    var postTrendPercent = recentPosts30 > 0 ? Math.Round((recentPosts7 / (double)recentPosts30) * 100d) : 0;
+
+    string UserNameById(int? id)
+    {
+        if (!id.HasValue) return "-";
+        return userMap.TryGetValue(id.Value, out var username) ? username : $"User#{id.Value}";
+    }
+
+    string InitialOf(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "?";
+        return text.Substring(0, 1).ToUpperInvariant();
+    }
+
+    string RoleLabel(string? role)
+    {
+        if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
+            return "Yönetici";
+        if (string.Equals(role, "Moderator", StringComparison.OrdinalIgnoreCase))
+            return "Moderatör";
+        return "Üye";
+    }
+
+    int CategoryUsage(string? slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+            return 0;
+        return categoryCounts.TryGetValue(slug, out var count) ? count : 0;
+    }
+}
+
+<style>
+    html, body { min-height: 100%; margin: 0; }
+
+    .admin-shell {
+        display: grid;
+        grid-template-columns: 324px 1fr;
+        gap: 0;
+        min-height: 100vh;
+        width: 100%;
+        padding: 0;
+        align-items: stretch;
+    }
+
+    .admin-sidebar {
+        background: var(--app-dark);
+        border-right: 1px solid #27324a;
+        color: #e5e7eb;
+        padding: 24px 20px 28px;
+        position: sticky;
+        top: 0;
+        align-self: stretch;
+        min-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+        overflow-y: auto;
+    }
+
+    .admin-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(255,255,255,.10);
+    }
+
+    .admin-brand-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: #fff;
+        color: var(--app-dark);
+        font-weight: 900;
+        font-size: 1.55rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .admin-brand-title {
+        color: #ffffff;
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+
+    .admin-brand-subtitle {
+        color: #9aa4b5;
+        font-size: 1.04rem;
+        margin-top: 2px;
+    }
+
+    .admin-nav-group {
+        color: #95a2ba;
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .12em;
+        margin: 16px 8px 10px;
+        font-weight: 700;
+    }
+
+    .admin-nav-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #e5e7eb;
+        text-decoration: none;
+        border-radius: 13px;
+        padding: 12px 13px;
+        font-weight: 700;
+        font-size: 1.06rem;
+        margin-bottom: 6px;
+        transition: background-color .16s ease, color .16s ease, transform .16s ease;
+    }
+
+    .admin-nav-link i {
+        width: 22px;
+        text-align: center;
+        font-size: 1.08rem;
+    }
+
+    .admin-nav-link.active {
+        color: #e5e7eb;
+        background: transparent;
+    }
+
+    .admin-nav-link:hover {
+        color: #fff;
+        background: #2a2d34;
+        transform: translateX(1px);
+    }
+
+    .admin-main {
+        min-width: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        padding: 16px 18px;
+        background: var(--app-cream);
+    }
+
+    .admin-page { display: none; }
+    .admin-page.active { display: block; min-height: 100%; }
+
+    .admin-topbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 14px;
+        align-items: start;
+        margin-bottom: 16px;
+    }
+
+    .admin-title {
+        font-size: clamp(1.55rem, 2vw, 2rem);
+        margin: 0;
+        color: #111827;
+    }
+
+    .admin-subtitle { color: #64748b; margin-top: 4px; }
+
+    .admin-profile-card,
+    .metric-card,
+    .panel-card,
+    .admin-data-card {
+        border: 1px solid #dce3ee;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .admin-profile-card { padding: 14px; min-width: 380px; }
+    .admin-profile-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+
+    .admin-avatar {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #12213f;
+        color: #fff;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .admin-profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .admin-btn {
+        border: 1px solid var(--app-border);
+        background: #fff;
+        color: var(--app-ink);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-weight: 700;
+        font-size: .82rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+    }
+
+    .admin-btn:hover,
+    .admin-btn:focus-visible {
+        background: var(--app-dark);
+        border-color: var(--app-dark);
+        color: #fff;
+    }
+
+    .admin-btn-dark {
+        border-color: var(--app-dark);
+        background: var(--app-dark);
+        color: #fff;
+    }
+
+    .admin-btn-dark:hover {
+        color: #fff;
+        background: #111827;
+        border-color: #111827;
+    }
+
+    .admin-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .metric-card { padding: 14px; }
+    .metric-label { color: #64748b; font-size: .82rem; margin-bottom: 8px; }
+    .metric-value { font-size: 1.62rem; font-weight: 800; color: #0f172a; line-height: 1; }
+    .metric-trend { color: #16a34a; font-weight: 700; font-size: .78rem; margin-left: 6px; }
+
+    .admin-content-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 12px;
+    }
+
+    .panel-card { padding: 14px; }
+    .panel-title { font-size: .95rem; font-weight: 800; color: #111827; margin-bottom: 12px; }
+
+    .activity-item {
+        display: grid;
+        grid-template-columns: 34px 1fr auto;
+        gap: 10px;
+        align-items: start;
+        padding: 10px 0;
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .activity-item:last-child { border-bottom: none; }
+
+    .activity-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #eff4ff;
+        color: #27427a;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .86rem;
+    }
+
+    .activity-text { color: #243044; font-size: .9rem; }
+    .activity-time { color: #7c879b; font-size: .76rem; white-space: nowrap; }
+
+    .quick-actions { display: flex; flex-direction: column; gap: 10px; }
+    .quick-actions .admin-btn { justify-content: flex-start; width: 100%; }
+
+    .admin-data-card { margin-bottom: 12px; }
+    .admin-data-card .card-body { padding: 16px; }
+
+    .admin-head-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .admin-head-tools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .table-search-wrap {
+        position: relative;
+        min-width: 320px;
+    }
+
+    .table-search-icon {
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #64748b;
+        font-size: .9rem;
+        pointer-events: none;
+    }
+
+    .table-search-input {
+        padding-left: 34px;
+    }
+
+    .admin-table {
+        border: 1px solid #e5e7eb;
+        margin-bottom: 0;
+    }
+
+    .admin-table thead th {
+        background: #f8fafc;
+        color: #334155;
+        font-size: .77rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .admin-table td,
+    .admin-table th {
+        vertical-align: middle;
+    }
+
+    .user-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .table-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #e9eef8;
+        color: #1f335f;
+        font-size: .78rem;
+        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+    }
+
+    .user-link {
+        color: inherit;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    .user-link:hover { text-decoration: underline; }
+
+    .role-badge {
+        font-size: .72rem;
+        font-weight: 800;
+        border-radius: 999px;
+        padding: 4px 10px;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .role-admin { background: #eef0ff; color: #4f46e5; border: 1px solid #cfd3ff; }
+    .role-moderator { background: #fff7e8; color: #b45309; border: 1px solid #f8d9a8; }
+    .role-user { background: #ebfff7; color: #0f8b64; border: 1px solid #bfe9d8; }
+
+    .action-buttons {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .action-icon-btn {
+        width: 34px;
+        height: 34px;
+        border: 1px solid #d2dae7;
+        border-radius: 8px;
+        background: #fff;
+        color: #384457;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: .15s ease;
+        padding: 0;
+    }
+
+    .action-icon-btn:hover {
+        background: #f8fafc;
+        transform: translateY(-1px);
+    }
+
+    .action-edit:hover { color: var(--app-purple); border-color: #ccd1ff; }
+    .action-open:hover { color: #0f766e; border-color: #b9ece7; }
+    .action-delete:hover { color: var(--app-danger); border-color: #fecaca; }
+
+    .category-name {
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .category-count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        border-radius: 999px;
+        border: 1px solid #d2dae7;
+        background: #f8fafc;
+        color: #1e293b;
+        font-weight: 800;
+        padding: 4px 10px;
+        font-size: .78rem;
+    }
+
+    .subcategory-block {
+        margin-top: 8px;
+        border-top: 1px dashed #e2e8f0;
+        padding-top: 8px;
+        min-height: 34px;
+    }
+
+    .subcategory-item {
+        display: block;
+        padding: 4px 0;
+    }
+
+    .subcategory-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #475569;
+        font-size: .82rem;
+        flex-wrap: wrap;
+    }
+
+    .subcategory-label {
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .subcategory-empty {
+        color: #94a3b8;
+        font-size: .82rem;
+        min-height: 20px;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .admin-shell { grid-template-columns: 1fr; }
+        .admin-sidebar { position: static; min-height: auto; padding: 16px; }
+        .admin-main { min-height: auto; padding: 12px; }
+    }
+
+    @@media (max-width: 991.98px) {
+        .admin-topbar { grid-template-columns: 1fr; }
+        .admin-profile-card { min-width: 0; }
+        .admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .admin-content-grid { grid-template-columns: 1fr; }
+        .table-search-wrap { min-width: 100%; }
+    }
+</style>
+
+<div class="admin-shell">
+    <aside class="admin-sidebar">
+        <div class="admin-brand">
+            <span class="admin-brand-logo">B</span>
+            <div>
+                <div class="admin-brand-title">Blogg App</div>
+                <div class="admin-brand-subtitle">Yönetim Paneli</div>
+            </div>
+        </div>
+
+        <div class="admin-nav-group">Menü</div>
+        <a class="admin-nav-link @(activeAdminPage == "overview" ? "active" : "")" href="#" data-admin-target="overview"><i class="bi bi-grid"></i>Genel Bakış</a>
+        <a class="admin-nav-link @(activeAdminPage == "users" ? "active" : "")" href="#" data-admin-target="users"><i class="bi bi-people"></i>Kullanıcı Yönetimi</a>
+        <a class="admin-nav-link @(activeAdminPage == "content" ? "active" : "")" href="#" data-admin-target="content"><i class="bi bi-file-earmark-text"></i>İçerik Yönetimi</a>
+        <a class="admin-nav-link @(activeAdminPage == "categories" ? "active" : "")" href="#" data-admin-target="categories"><i class="bi bi-tags"></i>Kategori Yönetimi</a>
+        <a class="admin-nav-link @(activeAdminPage == "analytics" ? "active" : "")" href="#" data-admin-target="analytics"><i class="bi bi-graph-up"></i>Analitik</a>
+        <a class="admin-nav-link @(activeAdminPage == "system" ? "active" : "")" href="#" data-admin-target="system"><i class="bi bi-gear"></i>Sistem Ayarları</a>
+
+        <div class="admin-nav-group mt-3">Site</div>
+        <a class="admin-nav-link" asp-controller="Blog" asp-action="Index"><i class="bi bi-house-door"></i>Ana Sayfa</a>
+        <a class="admin-nav-link" asp-controller="Account" asp-action="Logout"><i class="bi bi-box-arrow-right"></i>Çıkış</a>
+    </aside>
+
+    <main class="admin-main">
+        <section class="admin-page @(activeAdminPage == "overview" ? "active" : "")" data-admin-page="overview">
+            <div class="admin-topbar">
+                <div>
+                    <h1 class="admin-title">Yönetici Paneli</h1>
+                    <div class="admin-subtitle">Genel Bakış</div>
+                </div>
+
+                <div class="admin-profile-card">
+                    <div class="admin-profile-head">
+                        <span class="admin-avatar">@InitialOf(currentAdmin?.UserName)</span>
+                        <div>
+                            <div class="fw-bold">@(currentAdmin?.UserName ?? "Admin")</div>
+                            <div class="text-muted small">@RoleLabel(currentAdmin?.Role ?? currentUserRole)</div>
+                        </div>
+                    </div>
+                    <div class="admin-profile-actions">
+                        <a asp-controller="Account" asp-action="Profile" class="admin-btn admin-btn-dark"><i class="bi bi-person-circle"></i>Profil</a>
+                        <a asp-controller="Blog" asp-action="Index" class="admin-btn"><i class="bi bi-house-door"></i>Ana Sayfa</a>
+                        <a asp-controller="Account" asp-action="Logout" class="admin-btn"><i class="bi bi-box-arrow-right"></i>Çıkış</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-metrics">
+                <div class="metric-card">
+                    <div class="metric-label">Toplam Kullanıcı</div>
+                    <div><span class="metric-value">@ViewBag.UserCount</span><span class="metric-trend">+%@userTrendPercent</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Toplam Gönderi</div>
+                    <div><span class="metric-value">@ViewBag.PostCount</span><span class="metric-trend">+%@postTrendPercent</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Son Kayıtlar (7 Gün)</div>
+                    <div class="metric-value">@recentUsers7</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Bekleyen Onaylar</div>
+                    <div class="metric-value">@ViewBag.BlockCount</div>
+                </div>
+            </div>
+
+            <div class="admin-content-grid">
+                <div class="panel-card">
+                    <div class="panel-title">Son Faaliyetler</div>
+                    @{
+                        var recentLogs = Model.OrderByDescending(x => x.CreatedAt).Take(6).ToList();
+                    }
+                    @if (recentLogs.Any())
+                    {
+                        @foreach (var log in recentLogs)
+                        {
+                            <div class="activity-item">
+                                <span class="activity-icon"><i class="bi bi-clock-history"></i></span>
+                                <div class="activity-text">
+                                    <strong>@UserNameById(log.ActorUserId)</strong> @log.ActionType
+                                    @if (!string.IsNullOrWhiteSpace(log.Reason))
+                                    {
+                                        <span> · @log.Reason</span>
+                                    }
+                                </div>
+                                <div class="activity-time">@log.CreatedAt.ToString("d MMMM yyyy, HH:mm", tr)</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-muted">Henüz faaliyet kaydı bulunmuyor.</div>
+                    }
+                </div>
+
+                <div class="panel-card">
+                    <div class="panel-title">Hızlı Eylemler</div>
+                    <div class="quick-actions">
+                        <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#announcementModal"><i class="bi bi-megaphone"></i>Sistem Bildirimi Oluştur</button>
+                        @if (isSuperAdmin)
+                        {
+                            <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#moderatorModal"><i class="bi bi-person-plus"></i>Moderatör Ekle</button>
+                            <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#moderatorRemoveModal" @(canRemoveModerator ? "" : "disabled")><i class="bi bi-person-dash"></i>Moderatör Yetkisini Geri Al</button>
+                        }
+                        <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#featuredModal"><i class="bi bi-stars"></i>Ana Sayfa Öne Çıkanlarını Düzenle</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-page @(activeAdminPage == "users" ? "active" : "")" data-admin-page="users">
+            <div class="card admin-data-card">
+                <div class="card-body">
+                    <div class="admin-head-row">
+                        <h5 class="mb-0">Kullanıcı Yönetimi</h5>
+                        <div class="admin-head-tools">
+                            <div class="table-search-wrap">
+                                <i class="bi bi-search table-search-icon"></i>
+                                <input id="userTableSearch" type="text" class="form-control form-control-sm table-search-input" placeholder="Kullanıcı ara..." />
+                            </div>
+                            <a asp-controller="Account" asp-action="Register" class="admin-btn admin-btn-dark"><i class="bi bi-person-plus"></i>Yeni Kullanıcı Ekle</a>
+                        </div>
+                    </div>
+
+                    @if (users.Any())
+                    {
+                        <div class="table-responsive">
+                            <table id="usersTable" class="table table-striped admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Kullanıcı</th>
+                                        <th>E-posta</th>
+                                        <th>Rol</th>
+                                        <th>Kayıt</th>
+                                        <th style="width:120px;">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var user in users)
+                                    {
+                                        var isSelf = currentUserId.HasValue && currentUserId.Value == user.Id;
+                                        <tr>
+                                            <td>
+                                                <div class="user-cell">
+                                                    <span class="table-avatar">@InitialOf(user.UserName)</span>
+                                                    <a class="user-link" asp-controller="Account" asp-action="UserProfile" asp-route-username="@user.UserName">@user.UserName</a>
+                                                </div>
+                                            </td>
+                                            <td>@user.Email</td>
+                                            <td>
+                                                @{
+                                                    var roleClass = string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+                                                        ? "role-admin"
+                                                        : (string.Equals(user.Role, "Moderator", StringComparison.OrdinalIgnoreCase) ? "role-moderator" : "role-user");
+                                                }
+                                                <span class="role-badge @roleClass">
+                                                    @RoleLabel(user.Role)
+                                                </span>
+                                            </td>
+                                            <td>@user.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <a asp-controller="Account" asp-action="UserProfile" asp-route-username="@user.UserName"
+                                                       class="action-icon-btn action-open" title="Profili Aç">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
+                                                    <form asp-action="DeleteUser" method="post" class="d-inline" data-confirm="Bu kullanıcıyı ve ilişkili verilerini silmek istediğinize emin misiniz?">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="userId" value="@user.Id" />
+                                                        <input type="hidden" name="reason" value="Admin panel kullanıcı silme" />
+                                                        <button type="submit" class="action-icon-btn action-delete" title="Kullanıcıyı Sil" @(isSelf ? "disabled" : "")>
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">Kullanıcı kaydı bulunamadı.</div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-page @(activeAdminPage == "content" ? "active" : "")" data-admin-page="content">
+            <div class="card admin-data-card">
+                <div class="card-body">
+                    <div class="admin-head-row">
+                        <h5 class="mb-0">Gönderi Yönetimi</h5>
+                        <div class="table-search-wrap">
+                            <i class="bi bi-search table-search-icon"></i>
+                            <input id="postTableSearch" type="text" class="form-control form-control-sm table-search-input" placeholder="Gönderi ara..." />
+                        </div>
+                    </div>
+
+                    @if (posts.Any())
+                    {
+                        <div class="table-responsive">
+                            <table id="postsTable" class="table table-striped admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Başlık</th>
+                                        <th>Yazar</th>
+                                        <th>Yorum</th>
+                                        <th>Tarih</th>
+                                        <th style="width:120px;">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var post in posts)
+                                    {
+                                        <tr>
+                                            <td>@post.Id</td>
+                                            <td>@Html.Raw(TextFormat.SanitizeHtml(post.Title))</td>
+                                            <td>
+                                                <div class="user-cell">
+                                                    <span class="table-avatar">@InitialOf(post.User?.UserName)</span>
+                                                    <span>@(post.User?.UserName ?? "-")</span>
+                                                </div>
+                                            </td>
+                                            <td>@(post.Comments?.Count ?? 0)</td>
+                                            <td>@post.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <a asp-controller="Blog" asp-action="Details" asp-route-id="@post.Id" class="action-icon-btn action-open" title="Gönderiyi Aç">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
+                                                    <a asp-controller="Blog" asp-action="Edit" asp-route-id="@post.Id" class="action-icon-btn action-edit" title="Gönderiyi Düzenle">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    <form asp-action="DeletePost" method="post" class="d-inline" data-confirm="Bu gönderiyi silmek istediğinize emin misiniz?">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="postId" value="@post.Id" />
+                                                        <input type="hidden" name="reason" value="Admin panel gönderi silme" />
+                                                        <button type="submit" class="action-icon-btn action-delete" title="Gönderiyi Sil">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">Gönderi bulunamadı.</div>
+                    }
+                </div>
+            </div>
+
+            <div class="card admin-data-card">
+                <div class="card-body">
+                    <div class="admin-head-row">
+                        <h5 class="mb-0">Yorum Yönetimi</h5>
+                        <div class="table-search-wrap">
+                            <i class="bi bi-search table-search-icon"></i>
+                            <input id="commentTableSearch" type="text" class="form-control form-control-sm table-search-input" placeholder="Yorum ara..." />
+                        </div>
+                    </div>
+
+                    @if (comments.Any())
+                    {
+                        <div class="table-responsive">
+                            <table id="commentsTable" class="table table-striped admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Kullanıcı</th>
+                                        <th>Blog</th>
+                                        <th>Yorum</th>
+                                        <th>Tarih</th>
+                                        <th style="width:80px;">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var comment in comments)
+                                    {
+                                        var plainComment = TextFormat.StripHtml(comment.Content);
+                                        var preview = string.IsNullOrWhiteSpace(plainComment)
+                                            ? "-"
+                                            : (plainComment.Length > 100 ? plainComment.Substring(0, 100) + "..." : plainComment);
+                                        <tr>
+                                            <td>@comment.Id</td>
+                                            <td>
+                                                <div class="user-cell">
+                                                    <span class="table-avatar">@InitialOf(comment.User?.UserName)</span>
+                                                    <span>@(comment.User?.UserName ?? "-")</span>
+                                                </div>
+                                            </td>
+                                            <td>@Html.Raw(TextFormat.SanitizeHtml(comment.BlogPost?.Title ?? $"Blog#{comment.BlogPostId}"))</td>
+                                            <td>@preview</td>
+                                            <td>@comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td>
+                                                <form asp-action="DeleteComment" method="post" class="d-inline" data-confirm="Bu yorumu silmek istediğinize emin misiniz?">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="commentId" value="@comment.Id" />
+                                                    <input type="hidden" name="reason" value="Admin panel yorum silme" />
+                                                    <button type="submit" class="action-icon-btn action-delete" title="Yorumu Sil">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">Yorum bulunamadı.</div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-page @(activeAdminPage == "categories" ? "active" : "")" data-admin-page="categories">
+            <div class="card admin-data-card">
+                <div class="card-body">
+                    <div class="admin-head-row">
+                        <h5 class="mb-0">Kategori Yönetimi</h5>
+                        <div class="admin-head-tools">
+                            <div class="table-search-wrap">
+                                <i class="bi bi-search table-search-icon"></i>
+                                <input id="categoryTableSearch" type="text" class="form-control form-control-sm table-search-input" placeholder="Kategori ara..." />
+                            </div>
+                        </div>
+                    </div>
+
+                    <form asp-action="AddCategory" method="post" class="row g-2 align-items-center mb-3">
+                        @Html.AntiForgeryToken()
+                        <div class="col-md-9">
+                            <input name="name" class="form-control" maxlength="80" placeholder="Yeni kategori adi" required />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="admin-btn admin-btn-dark w-100"><i class="bi bi-plus-lg"></i>Kategori Ekle</button>
+                        </div>
+                    </form>
+
+                    @if (categoriesOrdered.Any())
+                    {
+                        <div class="table-responsive">
+                            <table id="categoriesTable" class="table table-striped admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Kategori</th>
+                                        <th style="width:120px;">Gonderi</th>
+                                        <th style="width:80px;">Sil</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var category in categoriesOrdered)
+                                    {
+                                        var usage = CategoryUsage(category.Slug);
+                                        <tr>
+                                            <td>
+                                                <div class="category-name">@category.Name</div>
+                                            </td>
+                                            <td>
+                                                <span class="category-count-badge">@usage</span>
+                                            </td>
+                                            <td>
+                                                <form asp-action="DeleteCategory" method="post" class="d-inline" data-confirm="Bu kategoriyi silmek istediginize emin misiniz?">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="categoryId" value="@category.Id" />
+                                                    <button type="submit" class="action-icon-btn action-delete" title="Kategoriyi Sil" @(categories.Count <= 1 ? "disabled" : "")>
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info mb-0">Kategori bulunamadi.</div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-page @(activeAdminPage == "analytics" ? "active" : "")" data-admin-page="analytics">
+            <div class="panel-card">
+                <div class="panel-title">Aksiyon Geçmişi</div>
+                @if (Model.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Aksiyon</th>
+                                    <th>Yapan</th>
+                                    <th>Hedef</th>
+                                    <th>Açıklama</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var log in Model.OrderByDescending(x => x.CreatedAt).Take(80))
+                                {
+                                    <tr>
+                                        <td>@log.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                        <td>@log.ActionType</td>
+                                        <td>@UserNameById(log.ActorUserId)</td>
+                                        <td>@UserNameById(log.TargetUserId)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(log.Reason) ? "-" : log.Reason)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted">Henüz log kaydı yok.</div>
+                }
+            </div>
+        </section>
+
+        <section class="admin-page @(activeAdminPage == "system" ? "active" : "")" data-admin-page="system">
+            <div class="panel-card">
+                <div class="panel-title">Sistem Ayarları ve Hızlı Eylemler</div>
+                <p class="text-muted mb-3">Bu alandan panel için hızlı işlemleri yürütebilirsin.</p>
+                <div class="quick-actions">
+                    <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#announcementModal"><i class="bi bi-megaphone"></i>Sistem Bildirimi Oluştur</button>
+                    @if (isSuperAdmin)
+                    {
+                        <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#moderatorModal"><i class="bi bi-person-plus"></i>Moderatör Ekle</button>
+                        <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#moderatorRemoveModal" @(canRemoveModerator ? "" : "disabled")><i class="bi bi-person-dash"></i>Moderatör Yetkisini Geri Al</button>
+                    }
+                    <button type="button" class="admin-btn" data-bs-toggle="modal" data-bs-target="#featuredModal"><i class="bi bi-stars"></i>Ana Sayfa Öne Çıkanlarını Düzenle</button>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="modal fade" id="announcementModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="CreateSystemAnnouncement" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Sistem Bildirimi Oluştur</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Başlık</label>
+                        <input name="title" class="form-control" maxlength="120" required />
+                    </div>
+                    <div>
+                        <label class="form-label">Bildirim Mesajı</label>
+                        <textarea name="message" class="form-control" rows="4" maxlength="600" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary">Oluştur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@if (isSuperAdmin)
+{
+<div class="modal fade" id="moderatorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="AddModerator" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Moderatör Ekle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Kullanıcı Seç</label>
+                    <select name="userId" class="form-select" required>
+                        <option value="">Kullanıcı seç...</option>
+                        @foreach (var u in users.Where(x =>
+                            !string.Equals(x.Role, "Admin", StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(x.Role, "Moderator", StringComparison.OrdinalIgnoreCase)).OrderBy(x => x.UserName))
+                        {
+                            <option value="@u.Id">@u.UserName (@u.Email)</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary">Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="moderatorRemoveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="RemoveModerator" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Moderatör Yetkisini Geri Al</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Moderatör Seç</label>
+                    <select name="userId" class="form-select" required>
+                        @if (canRemoveModerator)
+                        {
+                            <option value="">Moderatör seç...</option>
+                            @foreach (var u in removableModerators)
+                            {
+                                <option value="@u.Id">@u.UserName (@u.Email)</option>
+                            }
+                        }
+                        else
+                        {
+                            <option value="">Geri alınacak moderatör yok</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary" @(canRemoveModerator ? "" : "disabled")>Yetkiyi Geri Al</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+}
+
+<div class="modal fade" id="featuredModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="OpenFeaturedEditor" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Öne Çıkan İçeriği Düzenle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Gönderi Seç</label>
+                    <select name="postId" class="form-select" required>
+                        <option value="">Gönderi seç...</option>
+                        @foreach (var p in posts.OrderByDescending(x => x.CreatedAt).Take(100))
+                        {
+                            var plainTitle = TextFormat.StripHtml(p.Title);
+                            <option value="@p.Id">@plainTitle</option>
+                        }
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                    <button type="submit" class="btn btn-primary">Düzenlemeye Git</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const navLinks = Array.from(document.querySelectorAll(".admin-nav-link[data-admin-target]"));
+            const pages = Array.from(document.querySelectorAll(".admin-page[data-admin-page]"));
+            const adminForms = Array.from(document.querySelectorAll(".admin-shell form, .modal form"));
+
+            function getActivePanel() {
+                const activePage = document.querySelector(".admin-page.active");
+                return activePage ? (activePage.getAttribute("data-admin-page") || "overview") : "overview";
+            }
+
+            function upsertPanelInput(form, panelValue) {
+                if (!form) return;
+                let panelInput = form.querySelector('input[name="panel"]');
+                if (!panelInput) {
+                    panelInput = document.createElement("input");
+                    panelInput.type = "hidden";
+                    panelInput.name = "panel";
+                    form.appendChild(panelInput);
+                }
+                panelInput.value = panelValue;
+            }
+
+            function showPage(pageKey) {
+                navLinks.forEach(function (link) {
+                    link.classList.toggle("active", link.getAttribute("data-admin-target") === pageKey);
+                });
+
+                pages.forEach(function (page) {
+                    page.classList.toggle("active", page.getAttribute("data-admin-page") === pageKey);
+                });
+
+                adminForms.forEach(function (form) {
+                    upsertPanelInput(form, pageKey);
+                });
+
+                try {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set("panel", pageKey);
+                    history.replaceState({}, "", currentUrl.toString());
+                } catch (_) {
+                    // URL API desteklenmiyorsa panel yine localStorage ile korunur.
+                }
+
+                window.localStorage.setItem("admin.activePanel", pageKey);
+            }
+
+            navLinks.forEach(function (link) {
+                link.addEventListener("click", function (event) {
+                    event.preventDefault();
+                    const target = link.getAttribute("data-admin-target");
+                    if (!target) return;
+                    showPage(target);
+                });
+            });
+
+            adminForms.forEach(function (form) {
+                form.addEventListener("submit", function () {
+                    upsertPanelInput(form, getActivePanel());
+                });
+            });
+
+            const serverPage = "@activeAdminPage";
+            const isSuperAdmin = @isSuperAdmin.ToString().ToLowerInvariant();
+            const urlPanel = new URLSearchParams(window.location.search).get("panel");
+            const savedPanel = window.localStorage.getItem("admin.activePanel");
+            const initialPage = urlPanel || (serverPage !== "overview" ? serverPage : (savedPanel || serverPage));
+            showPage(initialPage || "overview");
+
+            if (!isSuperAdmin) {
+                document.querySelectorAll('[data-bs-target="#moderatorModal"], [data-bs-target="#moderatorRemoveModal"]').forEach(function (btn) {
+                    btn.classList.add("d-none");
+                });
+
+                const moderatorModal = document.getElementById("moderatorModal");
+                const moderatorRemoveModal = document.getElementById("moderatorRemoveModal");
+                moderatorModal?.remove();
+                moderatorRemoveModal?.remove();
+            }
+
+            function wireSearch(inputId, tableId) {
+                const input = document.getElementById(inputId);
+                const table = document.getElementById(tableId);
+                if (!input || !table || !table.tBodies.length) return;
+
+                input.addEventListener("input", function () {
+                    const q = (input.value || "").toLocaleLowerCase("tr-TR").trim();
+                    Array.from(table.tBodies[0].rows).forEach(function (row) {
+                        const text = (row.textContent || "").toLocaleLowerCase("tr-TR");
+                        row.style.display = !q || text.includes(q) ? "" : "none";
+                    });
+                });
+            }
+
+            wireSearch("userTableSearch", "usersTable");
+            wireSearch("postTableSearch", "postsTable");
+            wireSearch("commentTableSearch", "commentsTable");
+            wireSearch("categoryTableSearch", "categoriesTable");
+
+            if (typeof bootstrap !== "undefined") {
+                document.querySelectorAll("[title]").forEach(function (element) {
+                    new bootstrap.Tooltip(element);
+                });
+            }
+        })();
+    </script>
+}

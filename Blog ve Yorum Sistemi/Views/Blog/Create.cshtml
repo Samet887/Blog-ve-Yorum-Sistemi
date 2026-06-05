@@ -1,0 +1,1068 @@
+@model BireyselHesaplar.ViewModels.BlogCreateViewModel
+@using BireyselHesaplar.Models
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Yeni Gonderi";
+    var previewName = Context.Session.GetString("UserName") ?? "Sen";
+    var previewInitial = previewName.Substring(0, 1).ToUpperInvariant();
+    var rawCategories = ViewBag.Categories as List<Category> ?? new List<Category>();
+    var categoryItems = rawCategories
+        .Where(x => !string.IsNullOrWhiteSpace(x.Slug) && !string.IsNullOrWhiteSpace(x.Name))
+        .Select(x => (Value: x.Slug, Label: x.Name))
+        .ToList();
+
+    if (!categoryItems.Any())
+    {
+        categoryItems = new List<(string Value, string Label)>
+        {
+            ("teknoloji", "Teknoloji"),
+            ("yazilim", "Yazilim"),
+            ("tasarim", "Tasarim"),
+            ("yasam", "Yasam")
+        };
+    }
+
+    var defaultCategoryValue = categoryItems[0].Value;
+    var categoryJson = JsonSerializer.Serialize(categoryItems.Select(x => new { value = x.Value, label = x.Label }));
+}
+
+<style>
+    .studio-shell {
+        width: min(100%, 1360px);
+        margin: 0 auto;
+        border: 1px solid var(--app-border);
+        background: var(--app-cream);
+        border-radius: 16px;
+        box-shadow: 0 28px 64px rgba(15, 23, 42, .1);
+        padding: 24px;
+    }
+
+    .studio-topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .studio-back {
+        color: var(--app-ink);
+        text-decoration: none;
+        font-weight: 700;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .studio-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .studio-btn {
+        min-height: 42px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        font-size: .78rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 14px;
+    }
+
+    .studio-btn-primary {
+        color: #fff;
+        border-color: var(--app-dark);
+        background: var(--app-dark);
+    }
+    .studio-btn-soft {
+        color: var(--app-ink);
+        border-color: var(--app-border);
+        background: #fff;
+    }
+
+    .studio-hero {
+        border: 1px solid #334463;
+        border-radius: 14px;
+        padding: 20px;
+        color: #fff;
+        margin-bottom: 14px;
+        background:
+            linear-gradient(125deg, rgba(26, 30, 43, .9), rgba(47, 60, 95, .8)),
+            url("https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1800&q=80") center/cover no-repeat;
+    }
+    .studio-hero h1 { margin: 0 0 8px; font-size: clamp(2rem, 3.5vw, 3rem); line-height: 1.05; }
+    .studio-hero p { margin: 0; color: rgba(255,255,255,.86); }
+
+    .studio-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(380px, .9fr);
+        gap: 14px;
+        align-items: start;
+    }
+
+    .studio-card {
+        border: 1px solid var(--app-border);
+        border-radius: 14px;
+        background: #fff;
+    }
+    .studio-card-body { padding: 16px; }
+
+    .field-row { margin-bottom: 14px; }
+    .field-label {
+        font-size: .76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #5e6d8b;
+        margin-bottom: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        border: 1px solid var(--app-border);
+        background: #f7f9ff;
+        border-radius: 12px;
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+
+    .editor-toolbar .btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--app-border);
+        background: #fff;
+        color: var(--app-ink);
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .94rem;
+    }
+    .editor-toolbar .btn.active {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+    }
+    .editor-toolbar .btn:disabled {
+        opacity: .46;
+        cursor: not-allowed;
+        background: #eef2ff;
+        color: #6b7280;
+    }
+
+    .toolbar-select {
+        min-height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--app-border);
+        background: #fff;
+        min-width: 116px;
+        padding: 0 8px;
+        font-size: .86rem;
+        font-weight: 700;
+        color: var(--app-ink);
+    }
+
+    .editor {
+        min-height: 86px;
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+        outline: none;
+    }
+    .editor.content { min-height: 270px; line-height: 1.7; }
+    .editor[data-placeholder]:empty::before { content: attr(data-placeholder); color: #94a3b8; }
+
+    .input {
+        min-height: 42px;
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        background: #fff;
+        padding: 0 12px;
+        width: 100%;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+        border: 1px solid var(--app-border);
+        border-radius: 999px;
+        background: #fff;
+        padding: 6px 10px;
+        font-size: .78rem;
+        font-weight: 800;
+        color: var(--app-ink);
+        cursor: pointer;
+        user-select: none;
+    }
+    .chip.active {
+        border-color: var(--app-purple);
+        background: var(--app-purple);
+        color: #fff;
+    }
+
+    .upload-zone {
+        border: 1px dashed #c9d3e7;
+        border-radius: 12px;
+        padding: 12px;
+        background: #f9fbff;
+        display: grid;
+        gap: 8px;
+    }
+
+    .studio-side {
+        position: sticky;
+        top: 88px;
+    }
+
+    .preview-shell {
+        margin-top: 16px;
+    }
+
+    .preview-frame {
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden;
+        box-shadow: 0 14px 36px rgba(15, 23, 42, .08);
+    }
+    .preview-head {
+        border-bottom: 1px solid #dde6f6;
+        background: linear-gradient(135deg, #f7f9ff 0%, #eef4ff 100%);
+        padding: 12px 16px;
+        font-size: .82rem;
+        color: #475a82;
+        font-weight: 800;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+    .preview-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .preview-author { display: flex; align-items: center; gap: 8px; color: #334155; margin-bottom: 2px; }
+    .preview-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--app-dark); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
+    .preview-title {
+        font-family: "Lora", serif;
+        font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+        line-height: 1.2;
+        color: var(--app-ink);
+        margin: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .preview-layout { display: grid; gap: 16px; }
+    .preview-content {
+        color: #334155;
+        line-height: 1.76;
+        font-size: 1.05rem;
+        margin: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .preview-image {
+        display: none;
+        border: 1px solid #e6dece;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f8fafc;
+    }
+    .preview-image img {
+        width: 100%;
+        display: block;
+        object-fit: contain;
+        max-height: 560px;
+        background: #0f172a;
+    }
+
+    .draft-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .draft-item {
+        border: 1px solid var(--app-border);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .draft-item.active {
+        border-color: var(--app-purple);
+        box-shadow: inset 0 0 0 1px var(--app-purple);
+    }
+
+    .draft-title {
+        font-size: .84rem;
+        font-weight: 800;
+        color: #1e293b;
+        line-height: 1.2;
+    }
+
+    .draft-meta {
+        margin-top: 2px;
+        font-size: .72rem;
+        color: #64748b;
+    }
+
+    .draft-actions {
+        display: inline-flex;
+        gap: 6px;
+    }
+
+    .draft-action-btn {
+        min-height: 30px;
+        padding: 0 9px;
+        border-radius: 8px;
+        border: 1px solid #d6cfbf;
+        background: #fff;
+        color: #334155;
+        font-size: .7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .draft-empty {
+        font-size: .82rem;
+        color: #64748b;
+        margin-top: 4px;
+    }
+
+    @@media (max-width: 1100px) {
+        .studio-grid { grid-template-columns: 1fr; }
+        .studio-side { position: static; }
+        .preview-body { padding: 16px; }
+        .preview-image img { max-height: 420px; }
+    }
+</style>
+
+<div class="studio-shell">
+    <div class="studio-topbar">
+        <a asp-action="Index" class="studio-back"><i class="bi bi-arrow-left"></i> Tum Gonderilere Don</a>
+        <div class="studio-actions">
+            <button type="button" id="saveDraftBtn" class="studio-btn studio-btn-soft"><i class="bi bi-save"></i> Taslagi Kaydet</button>
+            <button type="button" id="jumpPreviewBtn" class="studio-btn studio-btn-soft"><i class="bi bi-eye"></i> Onizle</button>
+            <button type="submit" form="createPostForm" class="studio-btn studio-btn-primary"><i class="bi bi-send"></i> Yayinla</button>
+        </div>
+    </div>
+
+    <section class="studio-hero">
+        <h1>Yazi Studyosu</h1>
+        <p>Sol tarafta yaz, sag tarafta ana sayfada nasil gorunecegini aninda takip et.</p>
+    </section>
+
+    <div class="studio-grid">
+        <div class="studio-card">
+            <div class="studio-card-body">
+                <form id="createPostForm" asp-action="Create" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+                    <div class="field-row">
+                        <div class="field-label"><i class="bi bi-type-h1"></i> Baslik</div>
+                        <div class="editor-toolbar" aria-label="Baslik araclari">
+                            <select id="titleHeadingLevel" class="toolbar-select">
+                                <option value="h1">H1 Baslik</option>
+                                <option value="h2">H2 Baslik</option>
+                                <option value="h3">H3 Baslik</option>
+                            </select>
+                            <button type="button" class="btn" data-format="bold" data-scope="title" title="Kalin"><i class="bi bi-type-bold"></i></button>
+                            <button type="button" class="btn" data-format="italic" data-scope="title" title="Italik"><i class="bi bi-type-italic"></i></button>
+                            <button type="button" class="btn" data-format="underline" data-scope="title" title="Alti Cizili"><i class="bi bi-type-underline"></i></button>
+                        </div>
+                        <input type="hidden" asp-for="Title" id="titleInput" />
+                        <div id="titleEditor" class="editor" contenteditable="true" data-placeholder="Kisa ve net bir baslik yazin"></div>
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field-label"><i class="bi bi-file-richtext"></i> Icerik</div>
+                        <div class="editor-toolbar" aria-label="Icerik araclari">
+                            <button type="button" class="btn" data-format="bold"><i class="bi bi-type-bold"></i></button>
+                            <button type="button" class="btn" data-format="italic"><i class="bi bi-type-italic"></i></button>
+                            <button type="button" class="btn" data-format="underline"><i class="bi bi-type-underline"></i></button>
+                            <button type="button" class="btn" data-format="ul"><i class="bi bi-list-ul"></i></button>
+                            <button type="button" class="btn" data-format="ol"><i class="bi bi-list-ol"></i></button>
+                            <button type="button" class="btn" data-format="decrease" title="Yaziyi Kucult"><i class="bi bi-zoom-out"></i></button>
+                            <button type="button" class="btn" data-format="increase" title="Yaziyi Buyult"><i class="bi bi-zoom-in"></i></button>
+                        </div>
+                        <input type="hidden" asp-for="Content" id="contentInput" />
+                        <div id="contentEditor" class="editor content" contenteditable="true" data-placeholder="Neler paylasmak istiyorsun?"></div>
+                        <span asp-validation-for="Content" class="text-danger"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="studio-side">
+            <div class="studio-card mb-3">
+                <div class="studio-card-body">
+                    <div class="field-label"><i class="bi bi-image"></i> Gorsel Ayarlari</div>
+                    <div class="upload-zone">
+                        <button type="button" class="studio-btn studio-btn-soft" id="pickImageBtn"><i class="bi bi-upload"></i> Gorsel Yukle / Medyadan Sec</button>
+                        <input asp-for="ImageFile" id="imageFileInput" class="d-none" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" form="createPostForm" />
+                        <select asp-for="ImagePlacement" id="imagePlacementSelect" class="d-none" form="createPostForm">
+                            <option value="Right" selected>Sag</option>
+                        </select>
+                        <div class="small text-muted">Maksimum 20 MB. JPG, JPEG, PNG, WEBP, GIF.</div>
+                        <div id="imageFileError" class="text-danger small" style="display:none;"></div>
+                        <span asp-validation-for="ImageFile" class="text-danger"></span>
+                    </div>
+                    <input asp-for="ImageWidthPercent" id="imageWidthPercentInput" type="hidden" value="@Model.ImageWidthPercent" form="createPostForm" />
+
+                    <div class="field-row">
+                        <div class="field-label"><i class="bi bi-tags"></i> Kategori</div>
+                        <div class="chips" id="categoryChips">
+                            @for (var i = 0; i < categoryItems.Count; i++)
+                            {
+                                var item = categoryItems[i];
+                                <span class="chip @(i == 0 ? "active" : "")" data-value="@item.Value">@item.Label</span>
+                            }
+                        </div>
+                        <input type="hidden" asp-for="MetaHidden" id="metaHidden" form="createPostForm" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="studio-card mb-3">
+                <div class="studio-card-body">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <div class="field-label mb-0"><i class="bi bi-journal-bookmark"></i> Taslaklarim</div>
+                        <button type="button" class="draft-action-btn" id="newDraftBtn"><i class="bi bi-plus-lg"></i> Yeni</button>
+                    </div>
+                    <div id="draftsEmpty" class="draft-empty">Henuz taslak yok. "Taslagi Kaydet" ile olusturabilirsin.</div>
+                    <div id="draftsList" class="draft-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="preview-shell" id="previewAnchor">
+        <div class="preview-frame">
+            <div class="preview-head">Canli Onizleme</div>
+            <div class="preview-body">
+                <div class="preview-author">
+                    <span class="preview-avatar">@previewInitial</span>
+                    <strong>@previewName</strong>
+                    <span class="text-muted">- Simdi</span>
+                </div>
+                <div id="previewTitle" class="preview-title">Baslik burada gorunecek</div>
+                <div id="previewLayout" class="preview-layout">
+                    <div id="previewContent" class="preview-content text-muted">Icerik yazdikca burada canli olarak guncellenecek.</div>
+                    <div id="previewImageWrap" class="preview-image">
+                        <img id="previewImage" src="" alt="Onizleme gorseli" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const createPostForm = document.getElementById("createPostForm");
+            const titleEditor = document.getElementById("titleEditor");
+            const contentEditor = document.getElementById("contentEditor");
+            const titleInput = document.getElementById("titleInput");
+            const contentInput = document.getElementById("contentInput");
+            const previewTitle = document.getElementById("previewTitle");
+            const previewContent = document.getElementById("previewContent");
+            const imageInput = document.getElementById("imageFileInput");
+            const pickImageBtn = document.getElementById("pickImageBtn");
+            const imageError = document.getElementById("imageFileError");
+            const previewImage = document.getElementById("previewImage");
+            const previewImageWrap = document.getElementById("previewImageWrap");
+            const previewLayout = document.getElementById("previewLayout");
+            const placementSelect = document.getElementById("imagePlacementSelect");
+            const imageWidthPercentInput = document.getElementById("imageWidthPercentInput");
+            const titleHeadingLevel = document.getElementById("titleHeadingLevel");
+            const toolbarButtons = document.querySelectorAll(".editor-toolbar [data-format]");
+            const saveDraftBtn = document.getElementById("saveDraftBtn");
+            const jumpPreviewBtn = document.getElementById("jumpPreviewBtn");
+            const newDraftBtn = document.getElementById("newDraftBtn");
+            const draftsList = document.getElementById("draftsList");
+            const draftsEmpty = document.getElementById("draftsEmpty");
+            const previewAnchor = document.getElementById("previewAnchor");
+            const tagInput = document.getElementById("tagInput");
+            const customTagList = document.getElementById("customTagList");
+            const metaHidden = document.getElementById("metaHidden");
+            const categoryChipsContainer = document.getElementById("categoryChips");
+            const maxBytes = 20 * 1024 * 1024;
+            const allowedExt = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+            const customTags = new Set();
+            const DRAFT_STORAGE_KEY = "post.create.drafts";
+            const LEGACY_DRAFT_KEY = "post.create.draft";
+            const DEFAULT_CATEGORIES = @Html.Raw(categoryJson);
+            const DEFAULT_CATEGORY = "@defaultCategoryValue";
+            const CONTENT_FONT_MIN = 14;
+            const CONTENT_FONT_MAX = 26;
+            const CONTENT_FONT_STEP = 1;
+            let drafts = [];
+            let currentDraftId = null;
+            let currentDraftCreatedAt = null;
+
+            if (imageWidthPercentInput) {
+                const normalizedWidth = Math.max(25, Math.min(100, Number(imageWidthPercentInput.value || "60")));
+                imageWidthPercentInput.value = String(normalizedWidth);
+            }
+
+            function escapeHtml(value) {
+                return (value || "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function stripHtml(value) {
+                const temp = document.createElement("div");
+                temp.innerHTML = value || "";
+                return (temp.textContent || temp.innerText || "").trim();
+            }
+
+            function formatDraftDate(value) {
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return "-";
+                return date.toLocaleString("tr-TR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                });
+            }
+
+            function generateDraftId() {
+                return `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            }
+
+            function extractDraftTitle(titleHtml) {
+                const title = stripHtml(titleHtml).replace(/\s+/g, " ").trim();
+                return title.length > 0 ? title.slice(0, 80) : "Adsiz Taslak";
+            }
+
+            function loadDraftsFromStorage() {
+                try {
+                    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+                    if (!raw) return [];
+                    const parsed = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) return [];
+                    return parsed.filter(x => x && typeof x === "object" && typeof x.id === "string");
+                } catch {
+                    return [];
+                }
+            }
+
+            function saveDraftsToStorage() {
+                localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+            }
+
+            function migrateLegacyDraftIfNeeded() {
+                const legacyRaw = localStorage.getItem(LEGACY_DRAFT_KEY);
+                if (!legacyRaw || drafts.length > 0) return;
+
+                try {
+                    const legacy = JSON.parse(legacyRaw);
+                    if (!legacy || typeof legacy !== "object") return;
+
+                    const nowIso = new Date().toISOString();
+                    drafts = [{
+                        id: generateDraftId(),
+                        createdAt: nowIso,
+                        updatedAt: nowIso,
+                        title: legacy.title || "",
+                        content: legacy.content || "",
+                        heading: legacy.heading || "h1",
+                        placement: legacy.placement || "Right",
+                        width: legacy.width || "60",
+                        tags: Array.isArray(legacy.tags) ? legacy.tags : (typeof legacy.tags === "string" ? legacy.tags.split(",") : []),
+                        categories: DEFAULT_CATEGORIES,
+                        activeCategory: DEFAULT_CATEGORY
+                    }];
+
+                    saveDraftsToStorage();
+                    localStorage.removeItem(LEGACY_DRAFT_KEY);
+                } catch {
+                    localStorage.removeItem(LEGACY_DRAFT_KEY);
+                }
+            }
+
+            function renderDraftList() {
+                if (!draftsList || !draftsEmpty) return;
+
+                draftsList.innerHTML = "";
+                draftsEmpty.style.display = drafts.length ? "none" : "block";
+
+                drafts.forEach(function (draft) {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "draft-item" + (draft.id === currentDraftId ? " active" : "");
+
+                    const title = extractDraftTitle(draft.title);
+                    const updatedAt = formatDraftDate(draft.updatedAt || draft.createdAt);
+
+                    wrapper.innerHTML = `
+                        <div>
+                            <div class="draft-title">${escapeHtml(title)}</div>
+                            <div class="draft-meta">Guncellendi: ${escapeHtml(updatedAt)}</div>
+                        </div>
+                        <div class="draft-actions">
+                            <button type="button" class="draft-action-btn" data-draft-load="${escapeHtml(draft.id)}">Yukle</button>
+                            <button type="button" class="draft-action-btn" data-draft-delete="${escapeHtml(draft.id)}">Sil</button>
+                        </div>
+                    `;
+
+                    draftsList.appendChild(wrapper);
+                });
+            }
+
+            function applyDraftToEditor(draft) {
+                if (!draft) return;
+
+                titleEditor.innerHTML = draft.title || "";
+                contentEditor.innerHTML = draft.content || "";
+                titleHeadingLevel.value = draft.heading || "h1";
+                placementSelect.value = draft.placement || "Right";
+
+                const width = Math.max(25, Math.min(100, Number(draft.width || "60")));
+                if (imageWidthPercentInput) {
+                    imageWidthPercentInput.value = String(width);
+                }
+
+                customTags.clear();
+                if (Array.isArray(draft.tags)) {
+                    draft.tags.forEach(function (tag) {
+                        const normalized = normalizeTag(tag);
+                        if (normalized) customTags.add(normalized);
+                    });
+                } else if (typeof draft.tags === "string") {
+                    addTagsFromText(draft.tags);
+                }
+
+                currentDraftId = draft.id || null;
+                currentDraftCreatedAt = draft.createdAt || null;
+                const fallbackValues = new Set(DEFAULT_CATEGORIES.map(x => x.value));
+                const safeActiveCategory = fallbackValues.has(draft.activeCategory) ? draft.activeCategory : DEFAULT_CATEGORY;
+                renderCategoryChips(DEFAULT_CATEGORIES, safeActiveCategory);
+                renderCustomTags();
+                applyHeadingLevel();
+                syncContentFontSize(getContentFontSize());
+                updateImageLayout();
+                updatePreviewText();
+                syncMeta();
+                renderDraftList();
+            }
+
+            function buildDraftPayload() {
+                return {
+                    id: currentDraftId || generateDraftId(),
+                    createdAt: currentDraftCreatedAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    title: titleEditor.innerHTML || "",
+                    content: contentEditor.innerHTML || "",
+                    heading: titleHeadingLevel.value,
+                    placement: placementSelect.value,
+                    width: imageWidthPercentInput?.value || "60",
+                    tags: Array.from(customTags),
+                    categories: getCategoryChips().map(function (chip) {
+                        return {
+                            value: chip.getAttribute("data-value") || "",
+                            label: (chip.textContent || "").trim()
+                        };
+                    }),
+                    activeCategory: getActiveCategoryValue()
+                };
+            }
+
+            function resetEditorForNewDraft() {
+                currentDraftId = null;
+                currentDraftCreatedAt = null;
+                titleEditor.innerHTML = "";
+                contentEditor.innerHTML = "";
+                titleHeadingLevel.value = "h1";
+                placementSelect.value = "Right";
+                if (imageWidthPercentInput) {
+                    imageWidthPercentInput.value = "60";
+                }
+                customTags.clear();
+                if (tagInput) {
+                    tagInput.value = "";
+                }
+                renderCategoryChips(DEFAULT_CATEGORIES, DEFAULT_CATEGORY);
+                renderCustomTags();
+                applyHeadingLevel();
+                syncContentFontSize(getContentFontSize());
+                updateImageLayout();
+                updatePreviewText();
+                syncMeta();
+                renderDraftList();
+            }
+
+            function saveOrUpdateDraft() {
+                const payload = buildDraftPayload();
+                const index = drafts.findIndex(x => x.id === payload.id);
+
+                if (index >= 0) {
+                    drafts[index] = payload;
+                } else {
+                    drafts.unshift(payload);
+                }
+
+                currentDraftId = payload.id;
+                currentDraftCreatedAt = payload.createdAt;
+                saveDraftsToStorage();
+                localStorage.removeItem(LEGACY_DRAFT_KEY);
+                renderDraftList();
+            }
+
+            function deleteDraftById(draftId) {
+                drafts = drafts.filter(x => x.id !== draftId);
+                if (currentDraftId === draftId) {
+                    resetEditorForNewDraft();
+                }
+                saveDraftsToStorage();
+                renderDraftList();
+            }
+
+            function getCategoryChips() {
+                if (!categoryChipsContainer) return [];
+                return Array.from(categoryChipsContainer.querySelectorAll(".chip"));
+            }
+
+            function getActiveCategoryValue() {
+                return categoryChipsContainer?.querySelector(".chip.active")?.getAttribute("data-value") || DEFAULT_CATEGORY;
+            }
+
+            function renderCategoryChips(categories, activeValue) {
+                if (!categoryChipsContainer) return;
+                const safeCategories = Array.isArray(categories) && categories.length
+                    ? categories
+                    : DEFAULT_CATEGORIES;
+
+                categoryChipsContainer.innerHTML = "";
+
+                safeCategories.forEach(function (category) {
+                    if (!category || !category.value || !category.label) return;
+                    const chip = document.createElement("span");
+                    chip.className = "chip";
+                    chip.setAttribute("data-value", category.value);
+                    chip.textContent = category.label;
+                    if (category.value === activeValue) {
+                        chip.classList.add("active");
+                    }
+                    categoryChipsContainer.appendChild(chip);
+                });
+
+                if (!categoryChipsContainer.querySelector(".chip.active")) {
+                    const firstChip = categoryChipsContainer.querySelector(".chip");
+                    firstChip?.classList.add("active");
+                }
+            }
+
+            function sanitizeHtml(value) {
+                return (value || "")
+                    .replace(/<\/?b>/gi, m => m.startsWith("</") ? "</strong>" : "<strong>")
+                    .replace(/<\/?i>/gi, m => m.startsWith("</") ? "</em>" : "<em>")
+                    .replace(/<(?!\/?(strong|em|u|br|ul|ol|li|blockquote|pre|code)\b)[^>]*>/gi, "")
+                    .replace(/\n/g, "<br />");
+            }
+
+            function normalizeTag(rawValue) {
+                return (rawValue || "")
+                    .trim()
+                    .replace(/[<>"'`]/g, "")
+                    .replace(/\s+/g, " ")
+                    .toLowerCase();
+            }
+
+            function renderCustomTags() {
+                if (!customTagList) return;
+                customTagList.innerHTML = "";
+                Array.from(customTags).forEach(function (tag) {
+                    const chip = document.createElement("span");
+                    chip.className = "chip";
+                    chip.innerHTML = `${tag} <i class="bi bi-x-circle ms-1" data-remove-tag="${tag}" role="button" aria-label="Etiket sil"></i>`;
+                    customTagList.appendChild(chip);
+                });
+            }
+
+            function addTagsFromText(rawText) {
+                const parts = (rawText || "")
+                    .split(",")
+                    .map(normalizeTag)
+                    .filter(Boolean);
+
+                parts.forEach(function (tag) {
+                    customTags.add(tag);
+                });
+
+                renderCustomTags();
+                syncMeta();
+            }
+
+            function removeTag(tag) {
+                customTags.delete(tag);
+                renderCustomTags();
+                syncMeta();
+            }
+
+            function syncMeta() {
+                const activeCategory = getActiveCategoryValue();
+                metaHidden.value = JSON.stringify({ category: activeCategory, tags: Array.from(customTags) });
+            }
+
+            function updatePreviewText() {
+                const titleHtml = sanitizeHtml(titleEditor.innerHTML).replace(/<br\s*\/?>/gi, "").trim();
+                const contentHtml = sanitizeHtml(contentEditor.innerHTML).trim();
+                previewTitle.innerHTML = titleHtml || "Baslik burada gorunecek";
+                previewContent.innerHTML = contentHtml || "Icerik yazdikca burada canli olarak guncellenecek.";
+                previewContent.classList.toggle("text-muted", !contentHtml);
+                titleInput.value = titleHtml;
+                contentInput.value = contentHtml;
+            }
+
+            function updateImageLayout() {
+                const place = (placementSelect.value || "right").toLowerCase();
+                if (previewLayout) {
+                    previewLayout.setAttribute("data-placement", place);
+                }
+            }
+
+            function applyHeadingLevel() {
+                const map = { h1: "2rem", h2: "1.7rem", h3: "1.45rem" };
+                titleEditor.style.fontSize = map[titleHeadingLevel.value] || "1.7rem";
+            }
+
+            function getContentFontSize() {
+                const computed = Number.parseFloat(window.getComputedStyle(contentEditor).fontSize || "16");
+                return Number.isFinite(computed) ? computed : 16;
+            }
+
+            function clampContentFontSize(size) {
+                return Math.max(CONTENT_FONT_MIN, Math.min(CONTENT_FONT_MAX, Math.round(size)));
+            }
+
+            function syncContentFontSize(size) {
+                const clamped = clampContentFontSize(size);
+                contentEditor.style.fontSize = `${clamped}px`;
+                previewContent.style.fontSize = `${clamped}px`;
+                updateZoomButtons(clamped);
+            }
+
+            function adjustContentFontSize(direction) {
+                const delta = direction === "increase" ? CONTENT_FONT_STEP : -CONTENT_FONT_STEP;
+                syncContentFontSize(getContentFontSize() + delta);
+            }
+
+            function updateZoomButtons(currentSize) {
+                const current = clampContentFontSize(currentSize);
+                toolbarButtons.forEach(function (button) {
+                    const format = button.getAttribute("data-format");
+                    if (format === "decrease") {
+                        button.disabled = current <= CONTENT_FONT_MIN;
+                    }
+                    if (format === "increase") {
+                        button.disabled = current >= CONTENT_FONT_MAX;
+                    }
+                });
+            }
+
+            function applyFormat(format, scope) {
+                const target = scope === "title" ? titleEditor : contentEditor;
+                if (format === "decrease" || format === "increase") {
+                    adjustContentFontSize(format);
+                    return;
+                }
+                target.focus();
+                if (format === "bold") document.execCommand("bold", false, null);
+                if (format === "italic") document.execCommand("italic", false, null);
+                if (format === "underline") document.execCommand("underline", false, null);
+                if (format === "ul") document.execCommand("insertUnorderedList", false, null);
+                if (format === "ol") document.execCommand("insertOrderedList", false, null);
+                updatePreviewText();
+                updateActiveButtons(scope || "content");
+            }
+
+            function updateActiveButtons(scope) {
+                toolbarButtons.forEach(function (button) {
+                    const buttonScope = button.getAttribute("data-scope") || "content";
+                    if (buttonScope !== scope) {
+                        return;
+                    }
+
+                    const format = button.getAttribute("data-format");
+                    let isActive = false;
+
+                    if (format === "bold") isActive = document.queryCommandState("bold");
+                if (format === "italic") isActive = document.queryCommandState("italic");
+                if (format === "underline") isActive = document.queryCommandState("underline");
+                if (format === "ul") isActive = document.queryCommandState("insertUnorderedList");
+                if (format === "ol") isActive = document.queryCommandState("insertOrderedList");
+                if (format === "decrease" || format === "increase") {
+                    isActive = false;
+                }
+
+                button.classList.toggle("active", !!isActive);
+            });
+            }
+
+            function loadImageFile(file) {
+                imageError.style.display = "none";
+                if (!file) {
+                    previewImageWrap.style.display = "none";
+                    previewImage.removeAttribute("src");
+                    return;
+                }
+
+                const ext = file.name ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+                if (file.size > maxBytes || (ext && !allowedExt.includes(ext))) {
+                    imageError.style.display = "block";
+                    imageError.textContent = file.size > maxBytes ? "Dosya boyutu 20 MB sinirini asiyor." : "Desteklenmeyen dosya formati.";
+                    imageInput.value = "";
+                    previewImageWrap.style.display = "none";
+                    previewImage.removeAttribute("src");
+                    return;
+                }
+
+                const objectUrl = URL.createObjectURL(file);
+                previewImage.src = objectUrl;
+                previewImageWrap.style.display = "block";
+                updateImageLayout();
+            }
+
+            toolbarButtons.forEach(btn => {
+                btn.addEventListener("click", function () {
+                    applyFormat(btn.getAttribute("data-format"), btn.getAttribute("data-scope"));
+                });
+            });
+
+            titleEditor.addEventListener("input", updatePreviewText);
+            contentEditor.addEventListener("input", updatePreviewText);
+            titleEditor.addEventListener("keyup", function () { updateActiveButtons("title"); });
+            titleEditor.addEventListener("mouseup", function () { updateActiveButtons("title"); });
+            contentEditor.addEventListener("keyup", function () { updateActiveButtons("content"); });
+            contentEditor.addEventListener("mouseup", function () { updateActiveButtons("content"); });
+            titleHeadingLevel.addEventListener("change", applyHeadingLevel);
+            pickImageBtn.addEventListener("click", () => imageInput.click());
+            imageInput.addEventListener("change", function () { loadImageFile(imageInput.files && imageInput.files[0]); });
+
+            categoryChipsContainer?.addEventListener("click", function (event) {
+                const targetChip = event.target.closest(".chip");
+                if (!targetChip || !categoryChipsContainer.contains(targetChip)) return;
+
+                getCategoryChips().forEach(function (chip) {
+                    chip.classList.remove("active");
+                });
+                targetChip.classList.add("active");
+                syncMeta();
+            });
+
+            tagInput?.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === ",") {
+                    event.preventDefault();
+                    addTagsFromText(tagInput.value);
+                    tagInput.value = "";
+                }
+            });
+            tagInput?.addEventListener("blur", function () {
+                if ((tagInput.value || "").trim().length > 0) {
+                    addTagsFromText(tagInput.value);
+                    tagInput.value = "";
+                }
+            });
+            customTagList?.addEventListener("click", function (event) {
+                const removeTarget = event.target.closest("[data-remove-tag]");
+                if (!removeTarget) return;
+                const tag = removeTarget.getAttribute("data-remove-tag");
+                if (!tag) return;
+                removeTag(tag);
+            });
+
+            saveDraftBtn.addEventListener("click", function () {
+                saveOrUpdateDraft();
+                saveDraftBtn.innerHTML = '<i class="bi bi-check2"></i> Kaydedildi';
+                setTimeout(() => saveDraftBtn.innerHTML = '<i class="bi bi-save"></i> Taslagi Kaydet', 1400);
+            });
+
+            jumpPreviewBtn.addEventListener("click", function () {
+                previewAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+
+            draftsList?.addEventListener("click", function (event) {
+                const loadTarget = event.target.closest("[data-draft-load]");
+                if (loadTarget) {
+                    const draftId = loadTarget.getAttribute("data-draft-load");
+                    const targetDraft = drafts.find(x => x.id === draftId);
+                    if (targetDraft) {
+                        applyDraftToEditor(targetDraft);
+                    }
+                    return;
+                }
+
+                const deleteTarget = event.target.closest("[data-draft-delete]");
+                if (deleteTarget) {
+                    const draftId = deleteTarget.getAttribute("data-draft-delete");
+                    if (draftId) {
+                        deleteDraftById(draftId);
+                    }
+                }
+            });
+
+            newDraftBtn?.addEventListener("click", function () {
+                resetEditorForNewDraft();
+            });
+
+            createPostForm?.addEventListener("submit", function () {
+                updatePreviewText();
+                syncMeta();
+
+                if (imageWidthPercentInput) {
+                    const parsedWidth = Number(imageWidthPercentInput.value || "60");
+                    const normalizedWidth = Number.isFinite(parsedWidth)
+                        ? Math.max(25, Math.min(100, parsedWidth))
+                        : 60;
+                    imageWidthPercentInput.value = String(normalizedWidth);
+                }
+
+                if (placementSelect && !placementSelect.value) {
+                    placementSelect.value = "Right";
+                }
+            });
+
+            drafts = loadDraftsFromStorage();
+            migrateLegacyDraftIfNeeded();
+            renderDraftList();
+
+            if (drafts.length > 0) {
+                applyDraftToEditor(drafts[0]);
+            } else {
+                renderCategoryChips(DEFAULT_CATEGORIES, DEFAULT_CATEGORY);
+                renderCustomTags();
+                applyHeadingLevel();
+                syncContentFontSize(getContentFontSize());
+                updateImageLayout();
+                updatePreviewText();
+                syncMeta();
+                updateActiveButtons("title");
+                updateActiveButtons("content");
+            }
+        })();
+    </script>
+}

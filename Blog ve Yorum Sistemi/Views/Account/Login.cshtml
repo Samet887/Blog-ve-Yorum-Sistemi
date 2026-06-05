@@ -1,0 +1,313 @@
+@{
+    ViewData["Title"] = "Giriş Yap";
+    ViewData["HideChrome"] = true;
+}
+
+<style>
+    .auth-wrap {
+        position: relative;
+        overflow: hidden;
+        border-radius: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+            linear-gradient(135deg, rgba(2, 6, 23, 0.82), rgba(15, 23, 42, 0.68)),
+            url("https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2200&q=80") center/cover no-repeat;
+        box-shadow: none;
+        border: 0;
+    }
+
+    .auth-glass {
+        width: min(460px, 100%);
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12));
+        backdrop-filter: blur(11px);
+        -webkit-backdrop-filter: blur(11px);
+        box-shadow: 0 18px 36px rgba(2, 6, 23, 0.35);
+    }
+
+    .auth-title {
+        font-size: clamp(1.8rem, 3vw, 2.2rem);
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 6px;
+        letter-spacing: -0.4px;
+    }
+
+    .auth-subtitle {
+        color: rgba(241, 245, 249, 0.88);
+        margin-bottom: 20px;
+    }
+
+    .auth-label {
+        color: #e2e8f0;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .auth-input {
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        background: rgba(255, 255, 255, 0.92);
+        min-height: 46px;
+    }
+
+    .auth-input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 0.2rem rgba(96, 165, 250, 0.26);
+    }
+
+    .auth-check {
+        color: #e2e8f0;
+    }
+
+    .auth-btn {
+        border: none;
+        border-radius: 12px;
+        min-height: 48px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        box-shadow: 0 10px 22px rgba(59, 130, 246, 0.35);
+    }
+
+    .auth-btn:hover {
+        filter: brightness(1.04);
+    }
+
+    .auth-link {
+        color: #bfdbfe;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .auth-link:hover {
+        color: #dbeafe;
+        text-decoration: underline;
+    }
+
+    .auth-kvkk {
+        position: absolute;
+        right: 22px;
+        bottom: 18px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 0.78rem;
+        z-index: 2;
+    }
+
+    .auth-kvkk strong {
+        color: #f8fafc;
+    }
+
+    @@media (max-width: 575.98px) {
+        .auth-kvkk {
+            right: 12px;
+            bottom: 12px;
+        }
+    }
+
+    .kvkk-trigger {
+        border: 1px solid rgba(191, 219, 254, 0.65);
+        background: rgba(255, 255, 255, 0.08);
+        color: #dbeafe;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: .8rem;
+        padding: 7px 14px;
+        transition: background-color .2s ease, border-color .2s ease;
+    }
+
+    .kvkk-trigger:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: #dbeafe;
+    }
+
+    .kvkk-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        background: rgba(2, 6, 23, 0.62);
+        display: grid;
+        place-items: center;
+        padding: 16px;
+    }
+
+    .kvkk-overlay[hidden] {
+        display: none !important;
+    }
+
+    .kvkk-modal {
+        width: min(760px, 100%);
+        max-height: min(78vh, 820px);
+        overflow: auto;
+        border-radius: 16px;
+        border: 1px solid rgba(226, 232, 240, 0.35);
+        background: #f8fafc;
+        color: #1e293b;
+        box-shadow: 0 18px 48px rgba(2, 6, 23, 0.35);
+    }
+
+    .kvkk-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #dbe4f2;
+    }
+
+    .kvkk-modal-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    .kvkk-close {
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #334155;
+        border-radius: 10px;
+        width: 34px;
+        height: 34px;
+        line-height: 1;
+        font-size: 1.1rem;
+    }
+
+    .kvkk-modal-body {
+        padding: 14px 16px 16px;
+        font-size: .92rem;
+        line-height: 1.6;
+        color: #334155;
+    }
+
+    .kvkk-modal-body h4 {
+        margin: 0 0 6px;
+        font-size: .96rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    .kvkk-modal-body p:last-child {
+        margin-bottom: 0;
+    }
+</style>
+
+<div class="auth-wrap">
+    <div class="auth-glass p-4 p-md-5">
+        <h1 class="auth-title">Tekrar Hoş Geldin</h1>
+        <p class="auth-subtitle">Akışa dönmek için hesabına giriş yap.</p>
+
+        <form method="post" novalidate>
+            @Html.AntiForgeryToken()
+
+            <div class="mb-3">
+                <label class="form-label auth-label" for="username">Kullanıcı Adı</label>
+                <input id="username" name="username" class="form-control auth-input" placeholder="kullaniciadi" autocomplete="username" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label auth-label" for="password">Şifre</label>
+                <input id="password" name="password" type="password" class="form-control auth-input" placeholder="********" autocomplete="current-password" />
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="rememberMe" name="rememberMe" value="true" />
+                <label class="form-check-label auth-check" for="rememberMe">Beni hatırla</label>
+            </div>
+
+            @if (ViewBag.Error != null)
+            {
+                <div class="alert alert-danger py-2">@ViewBag.Error</div>
+            }
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success py-2">@TempData["SuccessMessage"]</div>
+            }
+
+            <button type="submit" class="btn btn-primary auth-btn w-100 mb-3">Giriş Yap</button>
+
+            <div class="d-flex flex-column align-items-center text-center gap-1 mb-2">
+                <a class="auth-link" asp-controller="Account" asp-action="ForgotPassword">Şifremi unuttum</a>
+                <span class="text-white-50 small">
+                    Hesabın yok mu?
+                    <a class="auth-link ms-1" asp-controller="Account" asp-action="Register">Kayıt ol</a>
+                </span>
+            </div>
+        </form>
+    </div>
+
+    <p class="auth-kvkk mb-0">
+        <button type="button" class="kvkk-trigger" id="openKvkkBtn">KVKK Metni</button>
+    </p>
+</div>
+
+<div id="kvkkOverlay" class="kvkk-overlay" hidden>
+    <div class="kvkk-modal" role="dialog" aria-modal="true" aria-labelledby="kvkkTitle">
+        <div class="kvkk-modal-head">
+            <h3 id="kvkkTitle" class="kvkk-modal-title">KVKK Metni (6698 Sayili Kanun Bilgilendirmesi)</h3>
+            <button type="button" class="kvkk-close" id="closeKvkkBtn" aria-label="Kapat">&times;</button>
+        </div>
+        <div class="kvkk-modal-body">
+            <h4>Kisisel Verilerin Korunmasi</h4>
+            <p>
+                Bu platformda iletilen ad, e-posta, icerik ve oturum bilgileri; 6698 sayili Kisisel Verilerin
+                Korunmasi Kanunu kapsaminda, hizmetin sunulmasi, guvenligin saglanmasi ve yasal yukumluluklerin
+                yerine getirilmesi amaclariyla islenebilir.
+            </p>
+            <h4>Isleme Ilkeleri ve Haklar</h4>
+            <p>
+                Veriler; hukuka ve durustluk kurallarina uygun, dogru ve gerektiginde guncel, belirli ve mesru amaclarla,
+                amacla baglantili, sinirli ve olculu sekilde islenir. Kullanici; verisine erisim, duzeltme, silme,
+                islemeyi sinirlama ve itiraz haklarini ilgili mevzuata uygun sekilde talep edebilir.
+            </p>
+            <h4>Detayli Aydinlatma</h4>
+            <p>
+                Bu metin bilgilendirme amaciyla ozetlenmistir. Uygulamanin resmi KVKK aydinlatma ve acik riza metinleri
+                yayinlandiginda esas alinacak metinler onlar olacaktir.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const openBtn = document.getElementById("openKvkkBtn");
+        const closeBtn = document.getElementById("closeKvkkBtn");
+        const overlay = document.getElementById("kvkkOverlay");
+        const modal = overlay?.querySelector(".kvkk-modal");
+
+        if (!openBtn || !closeBtn || !overlay || !modal) return;
+
+        function openModal() {
+            overlay.hidden = false;
+            closeBtn.focus();
+            document.body.style.overflow = "hidden";
+        }
+
+        function closeModal() {
+            overlay.hidden = true;
+            document.body.style.overflow = "";
+            openBtn.focus();
+        }
+
+        openBtn.addEventListener("click", openModal);
+        closeBtn.addEventListener("click", closeModal);
+
+        overlay.addEventListener("click", function (event) {
+            if (event.target === overlay) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && !overlay.hidden) {
+                closeModal();
+            }
+        });
+    })();
+</script>
